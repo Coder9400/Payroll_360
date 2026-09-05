@@ -9,6 +9,7 @@ export function LeaveRequestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [request, setRequest] = React.useState(null);
+  const [balance, setBalance] = React.useState(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
@@ -18,6 +19,10 @@ export function LeaveRequestDetail() {
       try {
         const data = await timeOffService.getLeaveRequest(id);
         setRequest(data);
+        if (data?.employeeId) {
+          const balances = await timeOffService.getEmployeeLeaveBalance(data.employeeId);
+          setBalance(balances.find(b => b.leaveTypeId === data.leaveTypeId) ?? null);
+        }
       } catch (err) {
         setError("Failed to load request.");
       } finally {
@@ -101,6 +106,34 @@ export function LeaveRequestDetail() {
           </div>
         </div>
       </div>
+
+      {balance && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Leave Balance — {request.leaveTypeName}</h3>
+          </div>
+          <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div>
+              <span className="block text-xs text-gray-500">Allocated</span>
+              <span className="text-xl font-bold text-gray-900">{balance.allocated}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-gray-500">Used</span>
+              <span className="text-xl font-bold text-gray-900">{balance.used}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-gray-500">This Request</span>
+              <span className="text-xl font-bold text-blue-600">{request.duration}</span>
+            </div>
+            <div>
+              <span className="block text-xs text-gray-500">Remaining</span>
+              <span className={`text-xl font-bold ${balance.remaining < request.duration ? 'text-red-600' : 'text-green-600'}`}>
+                {balance.remaining}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {(request.status === 'Approved' || request.status === 'Rejected') && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

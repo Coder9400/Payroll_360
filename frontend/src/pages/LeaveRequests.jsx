@@ -22,6 +22,8 @@ export function LeaveRequests() {
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [rejectionError, setRejectionError] = React.useState('');
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+  const [selectedBalance, setSelectedBalance] = React.useState(null);
+  const [isBalanceLoading, setIsBalanceLoading] = React.useState(false);
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
@@ -46,7 +48,19 @@ export function LeaveRequests() {
     setSelectedRequest(request);
     setRejectionReason('');
     setRejectionError('');
+    setSelectedBalance(null);
     setIsReviewModalOpen(true);
+
+    if (request.employeeId) {
+      setIsBalanceLoading(true);
+      timeOffService.getEmployeeLeaveBalance(request.employeeId)
+        .then(balances => {
+          const match = balances.find(b => b.leaveTypeId === request.leaveTypeId) ?? null;
+          setSelectedBalance(match);
+        })
+        .catch(error => console.error("Failed to load balance", error))
+        .finally(() => setIsBalanceLoading(false));
+    }
   };
 
   const handleApprove = async () => {
@@ -154,6 +168,36 @@ export function LeaveRequests() {
                   <span className="font-medium">{new Date(selectedRequest.endDate).toLocaleDateString()}</span>
                 </div>
               </div>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Current Leave Balance</h4>
+              {isBalanceLoading ? (
+                <div className="h-16 bg-gray-100 rounded-md animate-pulse" />
+              ) : selectedBalance ? (
+                <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
+                  <div>
+                    <span className="block text-xs text-gray-500">Allocated</span>
+                    <span className="text-sm font-semibold text-gray-900">{selectedBalance.allocated}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Used</span>
+                    <span className="text-sm font-semibold text-gray-900">{selectedBalance.used}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">This Request</span>
+                    <span className="text-sm font-semibold text-blue-600">{selectedRequest.duration}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-gray-500">Remaining</span>
+                    <span className={`text-sm font-semibold ${selectedBalance.remaining < selectedRequest.duration ? 'text-red-600' : 'text-green-600'}`}>
+                      {selectedBalance.remaining}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 italic">No balance record found for this leave type.</p>
+              )}
             </div>
 
             <div>

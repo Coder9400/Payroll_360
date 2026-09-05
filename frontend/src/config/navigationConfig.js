@@ -29,6 +29,7 @@ import {
   BarChart3,
   UserCircle,
   Clock,
+  Network,
 } from 'lucide-react';
 
 /** All defined roles — keep in sync with authService.ALL_ROLES */
@@ -91,6 +92,13 @@ export const navigationItems = [
   },
 
   // ── People ──────────────────────────────────────────────────────────────
+  {
+    label: 'Organization',
+    path: '/organization',
+    icon: Network,
+    group: 'PEOPLE',
+    allowedRoles: HR_AND_ABOVE,
+  },
   {
     label: 'Employees',
     path: '/employees',
@@ -156,7 +164,7 @@ export const navigationItems = [
   // ── Payroll ─────────────────────────────────────────────────────────────
   {
     label: 'Payruns',
-    path: '/payroll',
+    path: '/payruns',
     icon: Receipt,
     group: 'PAYROLL',
     allowedRoles: PAYROLL_ROLES,
@@ -228,6 +236,7 @@ export function getNavGroups(items) {
  */
 export const routeBreadcrumbs = {
   '/dashboard': [{ name: 'Dashboard', href: '/dashboard' }],
+  '/organization': [{ name: 'Organization', href: '/organization' }],
   '/employees': [{ name: 'Employees', href: '/employees' }],
   '/contracts': [{ name: 'Contracts', href: '/contracts' }],
   '/attendance': [{ name: 'Attendance', href: '/attendance' }],
@@ -248,7 +257,7 @@ export const routeBreadcrumbs = {
     { name: 'Time Off', href: '/time-off' },
     { name: 'Types', href: '/time-off/types' },
   ],
-  '/payroll': [{ name: 'Payroll', href: '/payroll' }],
+  '/payruns': [{ name: 'Payruns', href: '/payruns' }],
   '/payslips': [{ name: 'Payslips', href: '/payslips' }],
   '/salary-structures': [{ name: 'Salary Structures', href: '/salary-structures' }],
   '/salary-rules': [{ name: 'Salary Rules', href: '/salary-rules' }],

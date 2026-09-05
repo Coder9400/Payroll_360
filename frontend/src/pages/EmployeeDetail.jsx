@@ -1,40 +1,72 @@
 import * as React from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { employeeService } from "../services/employeeService";
+import { contractService } from "../services/contractService";
+import { attendanceService } from "../services/attendanceService";
+import { timeOffService } from "../services/timeOffService";
+import { payrollService } from "../services/payrollService";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
+import { Badge } from "../components/ui/Badge";
+import { Tabs } from "../components/ui/Tabs";
 import { EmployeeStatusBadge } from "../components/employee/EmployeeStatusBadge";
 import { Spinner } from "../components/ui/Spinner";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Modal } from "../components/ui/Modal";
 import { EmployeeForm } from "../components/employee/EmployeeForm";
-import { contractService } from "../services/contractService";
 import { ContractTable } from "../components/contracts/ContractTable";
-import { 
-  ArrowLeft, 
-  Edit, 
-  PowerOff, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  Building, 
-  Briefcase, 
-  User, 
-  FileText, 
-  Clock, 
+import {
+  ArrowLeft,
+  Edit,
+  PowerOff,
+  Mail,
+  Phone,
+  Calendar,
+  Building,
+  Briefcase,
+  User,
+  FileText,
+  Clock,
   CalendarDays,
-  LayoutDashboard
+  Wallet,
+  Receipt,
 } from "lucide-react";
 
-// Fallback dummy toast hook for now
-const useToast = () => {
-  return {
-    toast: ({ title, description }) => {
-      // alert(`${title}${description ? ': ' + description : ''}`);
-      console.log('Toast:', title, description);
-    }
-  };
-};
+const useToast = () => ({
+  toast: ({ title, description }) => console.log('Toast:', title, description),
+});
+
+const TABS = [
+  { id: 'overview',   label: 'Overview' },
+  { id: 'personal',   label: 'Personal' },
+  { id: 'employment', label: 'Employment' },
+  { id: 'attendance', label: 'Attendance' },
+  { id: 'leave',      label: 'Leave' },
+  { id: 'contract',   label: 'Contract' },
+  { id: 'salary',     label: 'Salary' },
+  { id: 'payroll',    label: 'Payroll' },
+];
+
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div>
+      <p className="text-sm text-gray-500 flex items-center"><Icon className="h-4 w-4 mr-2" /> {label}</p>
+      <p className="text-sm font-medium text-gray-900 mt-1">
+        {value || <span className="text-gray-400">Not provided</span>}
+      </p>
+    </div>
+  );
+}
+
+function formatDate(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function money(n) {
+  const num = Number(n ?? 0);
+  return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+}
 
 export function EmployeeDetail() {
   const { id } = useParams();
@@ -43,25 +75,31 @@ export function EmployeeDetail() {
 
   const [employee, setEmployee] = React.useState(null);
   const [contracts, setContracts] = React.useState([]);
-  const [activeTab, setActiveTab] = React.useState('work');
+  const [activeTab, setActiveTab] = React.useState('overview');
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
-  
+
   // Modal state
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [refData, setRefData] = React.useState(null);
 
+  // Tab-scoped data (lazy loaded)
+  const [attendance, setAttendance] = React.useState({ data: [], metrics: null, loading: false, loaded: false });
+  const [leave, setLeave] = React.useState({ allocations: [], requests: [], loading: false, loaded: false });
+  const [payslips, setPayslips] = React.useState({ data: [], loading: false, loaded: false });
+  const [salaryStructures, setSalaryStructures] = React.useState({ data: [], loading: false, loaded: false });
+
   const fetchEmployee = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const [data, contractData] = await Promise.all([
         employeeService.getEmployee(id),
-        contractService.getEmployeeContracts(id)
+        contractService.getEmployeeContracts(id).catch(() => []),
       ]);
       setEmployee(data);
-      setContracts(contractData);
+      setContracts(contractData ?? []);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load employee details.");
@@ -70,9 +108,7 @@ export function EmployeeDetail() {
     }
   }, [id]);
 
-  React.useEffect(() => {
-    fetchEmployee();
-  }, [fetchEmployee]);
+  React.useEffect(() => { fetchEmployee(); }, [fetchEmployee]);
 
   React.useEffect(() => {
     async function loadRefData() {
@@ -85,6 +121,35 @@ export function EmployeeDetail() {
     }
     loadRefData();
   }, []);
+
+  // Lazily load data for the active tab
+  React.useEffect(() => {
+    if (activeTab === 'attendance' && !attendance.loaded) {
+      setAttendance((p) => ({ ...p, loading: true }));
+      attendanceService.getEmployeeAttendance(id, { limit: 50 })
+        .then((res) => setAttendance({ data: res.data, metrics: res.metrics, loading: false, loaded: true }))
+        .catch(() => setAttendance({ data: [], metrics: null, loading: false, loaded: true }));
+    }
+    if (activeTab === 'leave' && !leave.loaded) {
+      setLeave((p) => ({ ...p, loading: true }));
+      Promise.all([
+        timeOffService.getEmployeeLeaveBalance(id).catch(() => []),
+        timeOffService.getLeaveRequests({ employeeId: id, limit: 50 }).catch(() => []),
+      ]).then(([allocations, requests]) => setLeave({ allocations, requests, loading: false, loaded: true }));
+    }
+    if (activeTab === 'payroll' && !payslips.loaded) {
+      setPayslips((p) => ({ ...p, loading: true }));
+      payrollService.getPayslips({ employee_id: id, limit: 50 })
+        .then((data) => setPayslips({ data: Array.isArray(data) ? data : [], loading: false, loaded: true }))
+        .catch(() => setPayslips({ data: [], loading: false, loaded: true }));
+    }
+    if (activeTab === 'salary' && !salaryStructures.loaded) {
+      setSalaryStructures((p) => ({ ...p, loading: true }));
+      payrollService.getSalaryStructures()
+        .then((data) => setSalaryStructures({ data: Array.isArray(data) ? data : [], loading: false, loaded: true }))
+        .catch(() => setSalaryStructures({ data: [], loading: false, loaded: true }));
+    }
+  }, [activeTab, id, attendance.loaded, leave.loaded, payslips.loaded, salaryStructures.loaded]);
 
   const handleFormSubmit = async (formData) => {
     setIsSubmitting(true);
@@ -125,9 +190,9 @@ export function EmployeeDetail() {
   if (error || !employee) {
     return (
       <div className="mt-8">
-        <EmptyState 
-          title="Employee Not Found" 
-          description={error || "The employee you are looking for does not exist."} 
+        <EmptyState
+          title="Employee Not Found"
+          description={error || "The employee you are looking for does not exist."}
         />
         <div className="flex justify-center mt-4">
           <Button variant="outline" onClick={() => navigate("/employees")}>
@@ -137,6 +202,8 @@ export function EmployeeDetail() {
       </div>
     );
   }
+
+  const latestContract = contracts?.[0] ?? null;
 
   return (
     <div className="space-y-6">
@@ -151,8 +218,8 @@ export function EmployeeDetail() {
         <div className="h-24 bg-gradient-to-r from-primary-600 to-primary-400"></div>
         <div className="px-6 sm:px-8 pb-6 flex flex-col sm:flex-row sm:items-end justify-between relative">
           <div className="flex flex-col sm:flex-row sm:items-end space-y-4 sm:space-y-0 sm:space-x-5 -mt-12 sm:-mt-10 relative z-10">
-            <Avatar 
-              fallback={`${employee.firstName[0]}${employee.lastName[0]}`} 
+            <Avatar
+              fallback={`${employee.firstName[0]}${employee.lastName[0]}`}
               className="h-24 w-24 text-2xl border-4 border-white shadow-md bg-white text-primary-600 font-bold"
             />
             <div className="pb-1">
@@ -168,13 +235,13 @@ export function EmployeeDetail() {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-6 sm:mt-0 flex items-center space-x-3">
             <Button variant="outline" onClick={() => setIsFormModalOpen(true)}>
               <Edit className="h-4 w-4 mr-2" /> Edit
             </Button>
-            <Button 
-              variant="danger" 
+            <Button
+              variant="danger"
               onClick={() => setIsDeactivateModalOpen(true)}
               disabled={employee.status === 'Inactive' || employee.status === 'Terminated'}
             >
@@ -184,191 +251,192 @@ export function EmployeeDetail() {
         </div>
       </div>
 
-      {/* Smart Navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <button onClick={() => setActiveTab('contracts')} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group text-left">
-          <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-100 mr-3">
-            <FileText className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Contracts</h3>
-            <p className="text-xs text-gray-500 mt-0.5">{contracts.length} Records</p>
-          </div>
-        </button>
-        <Link to={`/attendance?employee=${id}`} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group">
-          <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 mr-3">
-            <Clock className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Attendance</h3>
-            <p className="text-xs text-gray-500 mt-0.5">View</p>
-          </div>
-        </Link>
-        <Link to={`/time-off/requests?employee=${id}`} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group">
-          <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-100 mr-3">
-            <CalendarDays className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Time Off</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Requests</p>
-          </div>
-        </Link>
-        <Link to={`/time-off/allocations?employee=${id}`} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group">
-          <div className="h-10 w-10 rounded-full bg-purple-50 flex items-center justify-center text-purple-600 group-hover:bg-purple-100 mr-3">
-            <LayoutDashboard className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Allocations</h3>
-            <p className="text-xs text-gray-500 mt-0.5">View</p>
-          </div>
-        </Link>
-      </div>
+      {/* Tabs */}
+      <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Tabs */}
-          <div className="flex space-x-6 border-b border-gray-200 mb-6 overflow-x-auto">
-            <button 
-              className={`pb-3 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === 'work' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('work')}
-            >
-              Work & Personal
-            </button>
-            <button 
-              className={`pb-3 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === 'contracts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('contracts')}
-            >
-              Contracts
-            </button>
-          </div>
-
-          {activeTab === 'work' && (
-            <>
-              {/* Job Information */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Job Information</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Building className="h-4 w-4 mr-2" /> Department</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{employee.department}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Briefcase className="h-4 w-4 mr-2" /> Job Position</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{employee.position}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><User className="h-4 w-4 mr-2" /> Manager</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {employee.managerName || <span className="text-gray-400">None</span>}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Briefcase className="h-4 w-4 mr-2" /> Employee Type</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{employee.employeeType}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Calendar className="h-4 w-4 mr-2" /> Joining Date</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {new Date(employee.joiningDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Personal Information */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Personal Information</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><User className="h-4 w-4 mr-2" /> Full Name</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{employee.firstName} {employee.lastName}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Mail className="h-4 w-4 mr-2" /> Email</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  <a href={`mailto:${employee.email}`} className="text-primary-600 hover:underline">{employee.email}</a>
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Phone className="h-4 w-4 mr-2" /> Phone</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {employee.phone || <span className="text-gray-400">Not provided</span>}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Calendar className="h-4 w-4 mr-2" /> Date of Birth</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {employee.dob ? new Date(employee.dob).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : <span className="text-gray-400">Not provided</span>}
-                </p>
-              </div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Job Information</h2>
+            <div className="space-y-4">
+              <InfoRow icon={Building} label="Department" value={employee.department} />
+              <InfoRow icon={Briefcase} label="Job Position" value={employee.position} />
+              <InfoRow icon={User} label="Manager" value={employee.managerName} />
             </div>
           </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Contact</h2>
+            <div className="space-y-4">
+              <InfoRow icon={Mail} label="Email" value={employee.email} />
+              <InfoRow icon={Phone} label="Phone" value={employee.phone} />
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Current Contract</h2>
+            {latestContract ? (
+              <div className="space-y-4">
+                <InfoRow icon={Wallet} label="Salary" value={money(latestContract.salary)} />
+                <InfoRow icon={Calendar} label="Status" value={latestContract.status} />
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No contract on file.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'personal' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Personal Information</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+            <InfoRow icon={User} label="Full Name" value={`${employee.firstName} ${employee.lastName}`} />
+            <InfoRow icon={Mail} label="Email" value={employee.email} />
+            <InfoRow icon={Phone} label="Phone" value={employee.phone} />
+            <InfoRow icon={Calendar} label="Date of Birth" value={formatDate(employee.dob)} />
+            <InfoRow icon={Building} label="Address" value={employee.address} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'employment' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Employment Details</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
+            <InfoRow icon={Building} label="Department" value={employee.department} />
+            <InfoRow icon={Briefcase} label="Job Position" value={employee.position} />
+            <InfoRow icon={User} label="Manager" value={employee.managerName} />
+            <InfoRow icon={Briefcase} label="Employee Type" value={employee.employeeType} />
+            <InfoRow icon={Calendar} label="Joining Date" value={formatDate(employee.joiningDate)} />
+            <InfoRow icon={CalendarDays} label="Status" value={employee.status} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'attendance' && (
+        <div className="space-y-4">
+          {attendance.loading && <div className="flex justify-center py-8"><Spinner /></div>}
+          {!attendance.loading && attendance.data.length === 0 && (
+            <EmptyState icon={Clock} title="No attendance records" description="Attendance history will appear here once recorded." />
+          )}
+          {!attendance.loading && attendance.data.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+              {attendance.data.map((r) => (
+                <div key={r.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                  <span className="text-gray-900 font-medium">{r.date}</span>
+                  <span className="text-gray-500">
+                    {r.checkIn ? new Date(r.checkIn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    {' → '}
+                    {r.checkOut ? new Date(r.checkOut).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  </span>
+                  <span className="text-gray-500">{r.workedHours ?? '—'}h</span>
+                  <Badge variant={r.status === 'Present' ? 'success' : r.status === 'Late' ? 'warning' : 'default'}>
+                    {r.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'leave' && (
+        <div className="space-y-6">
+          {leave.loading && <div className="flex justify-center py-8"><Spinner /></div>}
+          {!leave.loading && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {leave.allocations.length === 0 ? (
+                  <div className="sm:col-span-3">
+                    <EmptyState icon={CalendarDays} title="No leave allocations" description="This employee has no leave balance allocated yet." />
+                  </div>
+                ) : leave.allocations.map((a) => (
+                  <div key={a.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                    <p className="text-sm font-semibold text-gray-900">{a.leaveTypeName}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{a.remaining}</p>
+                    <p className="text-xs text-gray-500">remaining of {a.allocated} allocated</p>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Leave Requests</h3>
+                {leave.requests.length === 0 ? (
+                  <p className="text-sm text-gray-400">No leave requests found.</p>
+                ) : (
+                  <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    {leave.requests.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                        <span className="text-gray-900 font-medium">{r.leaveTypeName}</span>
+                        <span className="text-gray-500">{r.startDate} – {r.endDate}</span>
+                        <span className="text-gray-500">{r.duration} {r.unit}</span>
+                        <Badge variant={r.status === 'Approved' ? 'success' : r.status === 'Pending' ? 'warning' : 'default'}>
+                          {r.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
+        </div>
+      )}
 
-          {activeTab === 'contracts' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-medium text-gray-900">Contract History</h3>
-                <Button size="sm" onClick={() => navigate(`/contracts/new?employeeId=${id}`)}>
-                  Create Contract
-                </Button>
+      {activeTab === 'contract' && (
+        <div className="space-y-4">
+          {contracts.length > 0 ? (
+            <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+              <ContractTable data={contracts} hideEmployee={true} />
+            </div>
+          ) : (
+            <EmptyState icon={FileText} title="No contracts found" description="This employee does not have any active or historical contracts." />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'salary' && (
+        <div className="space-y-4">
+          {salaryStructures.loading && <div className="flex justify-center py-8"><Spinner /></div>}
+          {!salaryStructures.loading && (
+            latestContract?.salary ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Current Salary</h2>
+                <InfoRow icon={Wallet} label="Wage" value={money(latestContract.salary)} />
               </div>
-              
-              {contracts.length > 0 ? (
-                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                  <ContractTable 
-                    data={contracts}
-                    hideEmployee={true}
-                  />
+            ) : (
+              <EmptyState icon={Wallet} title="No salary data" description="No salary structure is assigned to this employee's contract." />
+            )
+          )}
+        </div>
+      )}
+
+      {activeTab === 'payroll' && (
+        <div className="space-y-4">
+          {payslips.loading && <div className="flex justify-center py-8"><Spinner /></div>}
+          {!payslips.loading && payslips.data.length === 0 && (
+            <EmptyState icon={Receipt} title="No payslips yet" description="Payslips will appear here once a payrun including this employee is processed." />
+          )}
+          {!payslips.loading && payslips.data.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
+              {payslips.data.map((p) => (
+                <div key={p.id} className="flex items-center justify-between px-4 py-3 text-sm">
+                  <span className="text-gray-900 font-medium">{p.period_start} – {p.period_end}</span>
+                  <span className="text-gray-500">{money(p.net_amount)}</span>
+                  <Badge variant={p.status === 'PAID' ? 'success' : 'default'}>{p.status}</Badge>
                 </div>
-              ) : (
-                <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600 font-medium">No contracts found</p>
-                  <p className="text-xs text-gray-500 mt-1">This employee does not have any active or historical contracts.</p>
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Work Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Work Information</h2>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Mail className="h-4 w-4 mr-2" /> Work Email</p>
-                <p className="text-sm font-medium text-gray-900 mt-1 break-all">
-                  {employee.workEmail ? (
-                    <a href={`mailto:${employee.workEmail}`} className="text-primary-600 hover:underline">{employee.workEmail}</a>
-                  ) : (
-                    <span className="text-gray-400">Not provided</span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 flex items-center"><Phone className="h-4 w-4 mr-2" /> Work Phone</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">
-                  {employee.workPhone || <span className="text-gray-400">Not provided</span>}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Edit Form Modal */}
-      <Modal 
+      <Modal
         isOpen={isFormModalOpen}
         onClose={() => !isSubmitting && setIsFormModalOpen(false)}
         title="Edit Employee"
         className="max-w-3xl"
       >
-        <EmployeeForm 
+        <EmployeeForm
           initialData={employee || {}}
           onSubmit={handleFormSubmit}
           onCancel={() => setIsFormModalOpen(false)}
@@ -378,14 +446,14 @@ export function EmployeeDetail() {
       </Modal>
 
       {/* Deactivate Confirmation Modal */}
-      <Modal 
+      <Modal
         isOpen={isDeactivateModalOpen}
         onClose={() => !isSubmitting && setIsDeactivateModalOpen(false)}
         title="Deactivate Employee"
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            Are you sure you want to deactivate <strong>{employee?.firstName} {employee?.lastName}</strong>? 
+            Are you sure you want to deactivate <strong>{employee?.firstName} {employee?.lastName}</strong>?
             This will mark them as inactive but will not delete their records.
           </p>
           <div className="flex justify-end space-x-3">
@@ -398,7 +466,6 @@ export function EmployeeDetail() {
           </div>
         </div>
       </Modal>
-
     </div>
   );
 }

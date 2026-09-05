@@ -36,7 +36,15 @@ const sendError = (res, { message = 'An unexpected error occurred', code = 'INTE
   });
 };
 
+/**
+ * Positional-args success helper used across most controllers.
+ * successResponse(res, data, message, statusCode)
+ */
+const successResponse = (res, data = {}, message = 'Success', statusCode = 200) =>
+  sendSuccess(res, { data, message, statusCode });
+
 module.exports = {
   sendSuccess,
   sendError,
+  successResponse,
 };

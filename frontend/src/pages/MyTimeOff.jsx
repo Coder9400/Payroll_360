@@ -27,7 +27,17 @@ export function MyTimeOff() {
         timeOffService.getEmployeeLeaveBalance(employeeId),
         timeOffService.getLeaveRequests({ employeeId })
       ]);
-      setBalances(userBalances);
+
+      // Pending amount isn't tracked on the allocation row itself — derive it by
+      // summing this employee's own Pending requests per leave type.
+      const pendingByType = userRequests
+        .filter(r => r.status === 'Pending')
+        .reduce((acc, r) => {
+          acc[r.leaveTypeId] = (acc[r.leaveTypeId] ?? 0) + r.duration;
+          return acc;
+        }, {});
+
+      setBalances(userBalances.map(b => ({ ...b, pending: pendingByType[b.leaveTypeId] ?? 0 })));
       setRequests(userRequests);
     } catch (error) {
       console.error("Failed to load time off data", error);

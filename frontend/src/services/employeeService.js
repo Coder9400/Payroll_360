@@ -12,6 +12,26 @@ function unwrap(response) {
   return response.data?.data ?? response.data;
 }
 
+// List endpoints return a flat envelope: { success, data: [...], page, limit, total, totalPages }.
+// This normalizes that (or a payload nested under a named key) into a plain array + meta.
+function unwrapList(response, key) {
+  const body = response.data ?? {};
+  const payload = body.data;
+  const list = Array.isArray(payload)
+    ? payload
+    : (payload?.[key] ?? payload?.data ?? []);
+  const meta = Array.isArray(payload) ? body : (payload?.pagination ?? payload?.meta ?? payload ?? body);
+  return {
+    list,
+    meta: {
+      total: meta.total ?? list.length,
+      page: meta.page ?? 1,
+      limit: meta.limit ?? list.length,
+      totalPages: meta.totalPages ?? 1,
+    },
+  };
+}
+
 // ─── Field name mapper: backend (snake_case) → frontend (camelCase) ───────────
 function mapEmployee(e) {
   if (!e) return null;
@@ -22,9 +42,9 @@ function mapEmployee(e) {
     lastName:     e.last_name,
     email:        e.email,
     phone:        e.phone ?? '',
-    department:   e.department?.name ?? e.department_id ?? '',
+    department:   e.departments?.name ?? e.department_id ?? '',
     departmentId: e.department_id,
-    position:     e.job_position?.name ?? e.job_position_id ?? '',
+    position:     e.job_positions?.name ?? e.job_position_id ?? '',
     jobPositionId:e.job_position_id,
     manager:      e.manager_id ?? null,
     managerName:  e.manager ? `${e.manager.first_name} ${e.manager.last_name}` : null,
@@ -55,16 +75,11 @@ export const employeeService = {
     if (params.sortOrder)    query.set('sort_order', params.sortOrder);
 
     const response = await api.get(`/employees?${query.toString()}`);
-    const payload  = unwrap(response);
+    const { list, meta } = unwrapList(response, 'employees');
 
     return {
-      data: (payload.employees ?? payload.data ?? []).map(mapEmployee),
-      meta: payload.pagination ?? payload.meta ?? {
-        total: payload.total ?? 0,
-        page:  params.page ?? 1,
-        limit: params.limit ?? 10,
-        totalPages: Math.ceil((payload.total ?? 0) / (params.limit ?? 10)),
-      },
+      data: list.map(mapEmployee),
+      meta,
     };
   },
 
@@ -160,18 +175,18 @@ export const employeeService = {
       api.get('/schedules?limit=200'),
     ]);
 
-    const departments = (unwrap(deptRes).departments ?? unwrap(deptRes).data ?? [])
+    const departments = unwrapList(deptRes, 'departments').list
       .map(d => ({ id: d.id, value: d.id, label: d.name, name: d.name }));
 
-    const positions = (unwrap(posRes).job_positions ?? unwrap(posRes).data ?? [])
+    const positions = unwrapList(posRes, 'job_positions').list
       .map(p => ({ id: p.id, value: p.id, label: p.name, name: p.name, departmentId: p.department_id }));
 
-    const schedules = (unwrap(schedRes).schedules ?? unwrap(schedRes).data ?? [])
+    const schedules = unwrapList(schedRes, 'schedules').list
       .map(s => ({ id: s.id, value: s.id, label: `${s.name} (${s.hours_week}h/wk)`, name: s.name }));
 
     // Fetch active employees for manager dropdown
     const empRes = await api.get('/employees?employment_status=ACTIVE&limit=500');
-    const managers = (unwrap(empRes).employees ?? unwrap(empRes).data ?? [])
+    const managers = unwrapList(empRes, 'employees').list
       .map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.employee_code})` }));
 
     return {

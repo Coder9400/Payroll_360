@@ -23,16 +23,19 @@ export function ContractDetail() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [employees, setEmployees] = React.useState([]);
   const [schedules, setSchedules] = React.useState([]);
+  const [departments, setDepartments] = React.useState([]);
+  const [positions, setPositions] = React.useState([]);
   const [apiError, setApiError] = React.useState('');
 
   const [formData, setFormData] = React.useState({
     employeeId: initialEmployeeId || '',
+    contractNumber: '',
     status: 'Draft',
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
-    jobPosition: '',
-    department: '',
-    wageType: 'Monthly',
+    jobPositionId: '',
+    departmentId: '',
+    employmentType: 'FULL_TIME',
     salary: '',
     scheduleId: '',
     notes: ''
@@ -43,27 +46,33 @@ export function ContractDetail() {
   React.useEffect(() => {
     async function loadData() {
       try {
-        const [empData, schedData] = await Promise.all([
+        const [empData, schedData, refData] = await Promise.all([
           employeeService.getEmployees({ limit: 1000 }),
-          scheduleService.getSchedules()
+          scheduleService.getSchedules(),
+          employeeService.getReferenceData(),
         ]);
         setEmployees(empData.data.filter(e => e.status !== 'Terminated'));
         setSchedules(schedData.filter(s => s.isActive));
+        setDepartments(refData.departmentOptions ?? []);
+        setPositions(refData.positionOptions ?? []);
 
         if (!isNew) {
           const contract = await contractService.getContract(id);
           setFormData({
             employeeId: contract.employeeId,
+            contractNumber: contract.contractNumber || '',
             status: contract.status,
             startDate: contract.startDate,
             endDate: contract.endDate || '',
-            jobPosition: contract.jobPosition,
-            department: contract.department,
-            wageType: contract.wageType,
+            jobPositionId: contract.jobPositionId || '',
+            departmentId: contract.departmentId || '',
+            employmentType: contract.employmentType || 'FULL_TIME',
             salary: contract.salary,
             scheduleId: contract.scheduleId,
             notes: contract.notes || ''
           });
+        } else {
+          setFormData((f) => ({ ...f, contractNumber: `CON-${Date.now().toString().slice(-8)}` }));
         }
       } catch (error) {
         console.error("Failed to load data", error);
@@ -82,8 +91,9 @@ export function ContractDetail() {
     if (formData.endDate && formData.endDate < formData.startDate) {
       newErrors.endDate = "End date cannot be before start date";
     }
-    if (!formData.jobPosition.trim()) newErrors.jobPosition = "Job position is required";
-    if (!formData.department.trim()) newErrors.department = "Department is required";
+    if (!formData.contractNumber.trim()) newErrors.contractNumber = "Contract number is required";
+    if (!formData.jobPositionId) newErrors.jobPositionId = "Job position is required";
+    if (!formData.departmentId) newErrors.departmentId = "Department is required";
     if (!formData.salary || isNaN(formData.salary) || Number(formData.salary) <= 0) {
       newErrors.salary = "Valid positive salary amount is required";
     }
@@ -179,28 +189,49 @@ export function ContractDetail() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Job Position <span className="text-red-500">*</span>
+                Contract Number <span className="text-red-500">*</span>
               </label>
               <Input
-                value={formData.jobPosition}
-                onChange={(e) => setFormData({ ...formData, jobPosition: e.target.value })}
-                placeholder="e.g. Frontend Developer"
-                className={errors.jobPosition ? "border-red-500" : ""}
+                value={formData.contractNumber}
+                onChange={(e) => setFormData({ ...formData, contractNumber: e.target.value })}
+                placeholder="e.g. CON-00012345"
+                className={errors.contractNumber ? "border-red-500" : ""}
               />
-              {errors.jobPosition && <p className="text-red-500 text-xs mt-1">{errors.jobPosition}</p>}
+              {errors.contractNumber && <p className="text-red-500 text-xs mt-1">{errors.contractNumber}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Job Position <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={formData.jobPositionId}
+                onChange={(e) => setFormData({ ...formData, jobPositionId: e.target.value })}
+                className={errors.jobPositionId ? "border-red-500" : ""}
+              >
+                <option value="">Select Job Position</option>
+                {positions.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </Select>
+              {errors.jobPositionId && <p className="text-red-500 text-xs mt-1">{errors.jobPositionId}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Department <span className="text-red-500">*</span>
               </label>
-              <Input
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                placeholder="e.g. Engineering"
-                className={errors.department ? "border-red-500" : ""}
-              />
-              {errors.department && <p className="text-red-500 text-xs mt-1">{errors.department}</p>}
+              <Select
+                value={formData.departmentId}
+                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                className={errors.departmentId ? "border-red-500" : ""}
+              >
+                <option value="">Select Department</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </Select>
+              {errors.departmentId && <p className="text-red-500 text-xs mt-1">{errors.departmentId}</p>}
             </div>
 
             <div>

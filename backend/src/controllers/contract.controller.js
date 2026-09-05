@@ -97,6 +97,53 @@ exports.getContractById = async (req, res, next) => {
   }
 };
 
+exports.updateContract = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { start_date, end_date, employee_id, status } = req.body;
+
+    if (status === 'ACTIVE') {
+      const empId = employee_id ?? (await db.from('contracts').select('employee_id').eq('id', id).single()).data?.employee_id;
+      let query = db
+        .from('contracts')
+        .select('id')
+        .eq('employee_id', empId)
+        .eq('status', 'ACTIVE')
+        .neq('id', id);
+
+      if (end_date) {
+        query = query.or(`and(start_date.lte.${end_date},end_date.gte.${start_date}),and(start_date.lte.${end_date},end_date.is.null)`);
+      } else if (start_date) {
+        query = query.or(`end_date.gte.${start_date},end_date.is.null`);
+      }
+
+      const { data: overlapping, error: overlapError } = await query;
+      if (overlapError) throw new AppError(overlapError.message, 500);
+      if (overlapping && overlapping.length > 0) {
+        throw new AppError('An overlapping active contract already exists for this date range', 409);
+      }
+    }
+
+    const { data, error } = await db
+      .from('contracts')
+      .update(req.body)
+      .eq('id', id)
+      .select('*, employees(first_name, last_name, employee_code)')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') throw new AppError('Contract not found', 404);
+      if (error.code === '23505') throw new AppError('Contract number already exists', 409);
+      if (error.code === '23503') throw new AppError('A related record (Employee, Department, Job Position, Schedule) does not exist', 400);
+      throw new AppError(error.message, 500);
+    }
+
+    return successResponse(res, data, 'Contract updated successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getApplicableContract = async (req, res, next) => {
   try {
     const { employeeId, date } = req.params;

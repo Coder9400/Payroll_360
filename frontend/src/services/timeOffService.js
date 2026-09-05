@@ -11,6 +11,11 @@ function unwrap(response) {
   return response.data?.data ?? response.data;
 }
 
+// List endpoints return a flat array under `data`; some nest it under a named key instead.
+function unwrapList(payload, key) {
+  return Array.isArray(payload) ? payload : (payload?.[key] ?? payload?.data ?? []);
+}
+
 // Map backend time_off_type → frontend format
 function mapType(t) {
   if (!t) return null;
@@ -29,15 +34,15 @@ function mapType(t) {
 // Map backend allocation → frontend format
 function mapAllocation(a) {
   if (!a) return null;
-  const empName = a.employee
-    ? `${a.employee.first_name} ${a.employee.last_name}`
+  const empName = a.employees
+    ? `${a.employees.first_name} ${a.employees.last_name}`
     : (a.employee_name ?? '');
   return {
     id:            a.id,
     employeeId:    a.employee_id,
     employeeName:  empName,
     leaveTypeId:   a.time_off_type_id,
-    leaveTypeName: a.time_off_type?.name ?? '',
+    leaveTypeName: a.time_off_types?.name ?? '',
     year:          a.valid_from ? new Date(a.valid_from).getFullYear() : new Date().getFullYear(),
     allocated:     Number(a.allocated_amount ?? 0),
     approved:      Number(a.approved_amount ?? 0),
@@ -52,19 +57,35 @@ function mapAllocation(a) {
   };
 }
 
+// Map backend per-type balance summary (GET /employees/:id/time-off/balances) → frontend format
+function mapBalance(b) {
+  if (!b) return null;
+  return {
+    leaveTypeId:   b.time_off_type_id,
+    leaveTypeName: b.time_off_type?.name ?? '',
+    unit:          b.time_off_type?.unit ?? 'DAYS',
+    allocated:     Number(b.total_allocated ?? 0),
+    approved:      Number(b.total_approved ?? 0),
+    taken:         Number(b.total_taken ?? 0),
+    remaining:     Number(b.total_remaining ?? 0),
+    used:          Number(b.total_taken ?? 0),
+    pending:       0,
+  };
+}
+
 // Map backend time_off_request → frontend format
 function mapRequest(r) {
   if (!r) return null;
-  const empName = r.employee
-    ? `${r.employee.first_name} ${r.employee.last_name}`
+  const empName = r.employees
+    ? `${r.employees.first_name} ${r.employees.last_name}`
     : (r.employee_name ?? '');
   return {
     id:              r.id,
     employeeId:      r.employee_id,
     employeeName:    empName,
-    department:      r.employee?.department?.name ?? '',
+    department:      r.employees?.departments?.name ?? '',
     leaveTypeId:     r.time_off_type_id,
-    leaveTypeName:   r.time_off_type?.name ?? '',
+    leaveTypeName:   r.time_off_types?.name ?? '',
     startDate:       r.start_date,
     endDate:         r.end_date,
     duration:        Number(r.duration ?? 0),
@@ -92,7 +113,7 @@ export const timeOffService = {
     if (params.is_active !== undefined) query.set('is_active', params.is_active);
     const response = await api.get(`/time-off/types?${query.toString()}`);
     const payload  = unwrap(response);
-    return (payload.time_off_types ?? payload.data ?? []).map(mapType);
+    return unwrapList(payload, 'time_off_types').map(mapType);
   },
 
   async createLeaveType(data) {
@@ -131,13 +152,13 @@ export const timeOffService = {
     if (params.status)      query.set('status', params.status);
     const response = await api.get(`/time-off/allocations?${query.toString()}`);
     const payload  = unwrap(response);
-    return (payload.allocations ?? payload.data ?? []).map(mapAllocation);
+    return unwrapList(payload, 'allocations').map(mapAllocation);
   },
 
   async getEmployeeLeaveBalance(employeeId, params = {}) {
     const response = await api.get(`/employees/${employeeId}/time-off/balances`);
     const payload  = unwrap(response);
-    return (payload.balances ?? payload.data ?? []).map(mapAllocation);
+    return unwrapList(payload, 'balances').map(mapBalance);
   },
 
   async createLeaveAllocation(data) {
@@ -174,7 +195,7 @@ export const timeOffService = {
     }
     const response = await api.get(`/time-off/requests?${query.toString()}`);
     const payload  = unwrap(response);
-    return (payload.requests ?? payload.data ?? []).map(mapRequest);
+    return unwrapList(payload, 'requests').map(mapRequest);
   },
 
   async getLeaveRequest(id) {

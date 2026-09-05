@@ -15,6 +15,7 @@ import { AccessDenied } from './pages/AccessDenied';
 
 // App pages
 import { Dashboard } from './pages/Dashboard';
+import { Organization } from './pages/Organization';
 import { Employees } from './pages/Employees';
 import { EmployeeDetail } from './pages/EmployeeDetail';
 import { Attendance } from './pages/Attendance';
@@ -30,6 +31,13 @@ import { Contracts } from './pages/Contracts';
 import { ContractDetail } from './pages/ContractDetail';
 import { WorkingSchedules } from './pages/WorkingSchedules';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+
+// Payroll pages (Phase 4+5)
+import { SalaryStructures } from './pages/SalaryStructures';
+import { Payruns } from './pages/Payruns';
+import { PayrunDetail } from './pages/PayrunDetail';
+import { PayslipDetail } from './pages/PayslipDetail';
+import { MyPayslips } from './pages/MyPayslips';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
 const R = {
@@ -119,12 +127,20 @@ function App() {
               path="my-payslips"
               element={
                 <AuthRoute roles={[R.EMPLOYEE]}>
-                  <PlaceholderPage title="My Payslips" description="View your payslips" phase="Phase 07" />
+                  <MyPayslips />
                 </AuthRoute>
               }
             />
 
             {/* ── People ────────────────────────────────────────────── */}
+            <Route
+              path="organization"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <Organization />
+                </AuthRoute>
+              }
+            />
             <Route
               path="employees"
               element={
@@ -236,18 +252,26 @@ function App() {
 
             {/* ── Payroll ──────────────────────────────────────────── */}
             <Route
-              path="payroll"
+              path="payruns"
               element={
                 <AuthRoute roles={PAYROLL_ROLES}>
-                  <PlaceholderPage title="Payruns" description="Process and manage payroll runs" phase="Phase 05" />
+                  <Payruns />
                 </AuthRoute>
               }
             />
             <Route
-              path="payslips"
+              path="payruns/:id"
               element={
                 <AuthRoute roles={PAYROLL_ROLES}>
-                  <PlaceholderPage title="Payslips" description="View and generate employee payslips" phase="Phase 07" />
+                  <PayrunDetail />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payslips/:id"
+              element={
+                <AuthRoute roles={ALL}>
+                  <PayslipDetail />
                 </AuthRoute>
               }
             />
@@ -255,15 +279,7 @@ function App() {
               path="salary-structures"
               element={
                 <AuthRoute roles={PAYROLL_MGR}>
-                  <PlaceholderPage title="Salary Structures" description="Configure salary structures" phase="Phase 05" />
-                </AuthRoute>
-              }
-            />
-            <Route
-              path="salary-rules"
-              element={
-                <AuthRoute roles={PAYROLL_MGR}>
-                  <PlaceholderPage title="Salary Rules" description="Configure payroll computation rules" phase="Phase 05" />
+                  <SalaryStructures />
                 </AuthRoute>
               }
             />
