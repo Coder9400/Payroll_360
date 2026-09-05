@@ -8,6 +8,8 @@ import { Spinner } from "../components/ui/Spinner";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Modal } from "../components/ui/Modal";
 import { EmployeeForm } from "../components/employee/EmployeeForm";
+import { contractService } from "../services/contractService";
+import { ContractTable } from "../components/contracts/ContractTable";
 import { 
   ArrowLeft, 
   Edit, 
@@ -40,6 +42,8 @@ export function EmployeeDetail() {
   const { toast } = useToast();
 
   const [employee, setEmployee] = React.useState(null);
+  const [contracts, setContracts] = React.useState([]);
+  const [activeTab, setActiveTab] = React.useState('work');
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
   
@@ -52,8 +56,12 @@ export function EmployeeDetail() {
   const fetchEmployee = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await employeeService.getEmployee(id);
+      const [data, contractData] = await Promise.all([
+        employeeService.getEmployee(id),
+        contractService.getEmployeeContracts(id)
+      ]);
       setEmployee(data);
+      setContracts(contractData);
       setError(null);
     } catch (err) {
       setError(err.message || "Failed to load employee details.");
@@ -178,15 +186,15 @@ export function EmployeeDetail() {
 
       {/* Smart Navigation */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link to={`/employees/${id}/contracts`} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group">
+        <button onClick={() => setActiveTab('contracts')} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group text-left">
           <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-100 mr-3">
             <FileText className="h-5 w-5" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Contracts</h3>
-            <p className="text-xs text-gray-500 mt-0.5">View</p>
+            <p className="text-xs text-gray-500 mt-0.5">{contracts.length} Records</p>
           </div>
-        </Link>
+        </button>
         <Link to={`/attendance?employee=${id}`} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center hover:shadow-md transition-shadow group">
           <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 mr-3">
             <Clock className="h-5 w-5" />
@@ -219,8 +227,26 @@ export function EmployeeDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Job Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          {/* Tabs */}
+          <div className="flex space-x-6 border-b border-gray-200 mb-6 overflow-x-auto">
+            <button 
+              className={`pb-3 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === 'work' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setActiveTab('work')}
+            >
+              Work & Personal
+            </button>
+            <button 
+              className={`pb-3 text-sm font-medium border-b-2 whitespace-nowrap ${activeTab === 'contracts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              onClick={() => setActiveTab('contracts')}
+            >
+              Contracts
+            </button>
+          </div>
+
+          {activeTab === 'work' && (
+            <>
+              {/* Job Information */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Job Information</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
               <div>
@@ -278,6 +304,34 @@ export function EmployeeDetail() {
               </div>
             </div>
           </div>
+            </>
+          )}
+
+          {activeTab === 'contracts' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-medium text-gray-900">Contract History</h3>
+                <Button size="sm" onClick={() => navigate(`/contracts/new?employeeId=${id}`)}>
+                  Create Contract
+                </Button>
+              </div>
+              
+              {contracts.length > 0 ? (
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <ContractTable 
+                    data={contracts}
+                    hideEmployee={true}
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                  <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600 font-medium">No contracts found</p>
+                  <p className="text-xs text-gray-500 mt-1">This employee does not have any active or historical contracts.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Column */}

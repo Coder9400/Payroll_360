@@ -26,6 +26,9 @@ import { LeaveRequests } from './pages/LeaveRequests';
 import { LeaveRequestDetail } from './pages/LeaveRequestDetail';
 import { LeaveAllocations } from './pages/LeaveAllocations';
 import { LeaveTypes } from './pages/LeaveTypes';
+import { Contracts } from './pages/Contracts';
+import { ContractDetail } from './pages/ContractDetail';
+import { WorkingSchedules } from './pages/WorkingSchedules';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
@@ -142,7 +145,23 @@ function App() {
               path="contracts"
               element={
                 <AuthRoute roles={HR_MGR_ROLES}>
-                  <PlaceholderPage title="Contracts" description="Manage employee contracts" phase="Phase 03" />
+                  <Contracts />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="contracts/:id"
+              element={
+                <AuthRoute roles={HR_MGR_ROLES}>
+                  <ContractDetail />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="schedules"
+              element={
+                <AuthRoute roles={HR_MGR_ROLES}>
+                  <WorkingSchedules />
                 </AuthRoute>
               }
             />
