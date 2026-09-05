@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   CalendarDays,
   CalendarClock,
+  CalendarOff,
   FileSignature,
   Receipt,
   FileText,
@@ -136,6 +137,13 @@ export const navigationItems = [
     group: 'TIME OFF',
     allowedRoles: HR_MANAGER_ROLES,
   },
+  {
+    label: 'Types',
+    path: '/time-off/types',
+    icon: CalendarOff,
+    group: 'TIME OFF',
+    allowedRoles: HR_MANAGER_ROLES,
+  },
 
   // ── Payroll ─────────────────────────────────────────────────────────────
   {
@@ -227,6 +235,10 @@ export const routeBreadcrumbs = {
   '/time-off/allocations': [
     { name: 'Time Off', href: '/time-off' },
     { name: 'Allocations', href: '/time-off/allocations' },
+  ],
+  '/time-off/types': [
+    { name: 'Time Off', href: '/time-off' },
+    { name: 'Types', href: '/time-off/types' },
   ],
   '/payroll': [{ name: 'Payroll', href: '/payroll' }],
   '/payslips': [{ name: 'Payslips', href: '/payslips' }],
