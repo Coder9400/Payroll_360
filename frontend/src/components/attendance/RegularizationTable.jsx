@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Table } from "../ui/Table";
+import { DataTable } from "../ui/DataTable";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -122,7 +122,7 @@ export function RegularizationTable({
   }
 
   return (
-    <Table
+    <DataTable
       columns={columns}
       data={data}
       keyExtractor={(item) => item.id}

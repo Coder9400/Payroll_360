@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Table } from "../ui/Table";
+import { DataTable } from "../ui/DataTable";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { ContractStatusBadge } from "./ContractStatusBadge";
@@ -88,7 +88,7 @@ export function ContractTable({
   ];
 
   return (
-    <Table
+    <DataTable
       columns={[...columns, ...commonColumns]}
       data={data}
       keyExtractor={(item) => item.id}

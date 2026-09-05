@@ -2,7 +2,7 @@ import * as React from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { scheduleService } from '../services/scheduleService';
 import { ScheduleForm } from '../components/schedules/ScheduleForm';
-import { Table } from '../components/ui/Table';
+import { DataTable } from '../components/ui/DataTable';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -150,7 +150,7 @@ export function WorkingSchedules() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <Table 
+        <DataTable 
           columns={columns}
           data={schedules}
           keyExtractor={(item) => item.id}

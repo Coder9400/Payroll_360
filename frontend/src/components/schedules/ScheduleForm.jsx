@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
+import { TimePicker } from "../ui/TimePicker";
 
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -22,6 +23,12 @@ export function ScheduleForm({ onSubmit, onCancel, isLoading, initialData = null
     const [endH, endM] = formData.dailyEndTime.split(':').map(Number);
     
     let hoursPerDay = (endH + endM / 60) - (startH + startM / 60);
+    
+    // Handle cross-midnight shifts (e.g. 22:00 to 06:00)
+    if (hoursPerDay < 0) {
+      hoursPerDay += 24;
+    }
+    
     hoursPerDay -= formData.breakDurationHours;
     
     if (hoursPerDay < 0) hoursPerDay = 0;
@@ -51,12 +58,6 @@ export function ScheduleForm({ onSubmit, onCancel, isLoading, initialData = null
     if (formData.workingDays.length === 0) newErrors.workingDays = "Select at least one working day";
     if (!formData.dailyStartTime) newErrors.dailyStartTime = "Start time is required";
     if (!formData.dailyEndTime) newErrors.dailyEndTime = "End time is required";
-    
-    if (formData.dailyStartTime && formData.dailyEndTime) {
-      if (formData.dailyEndTime <= formData.dailyStartTime) {
-        newErrors.time = "End time must be after start time";
-      }
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -115,11 +116,10 @@ export function ScheduleForm({ onSubmit, onCancel, isLoading, initialData = null
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Start Time <span className="text-red-500">*</span>
           </label>
-          <Input
-            type="time"
+          <TimePicker
             value={formData.dailyStartTime}
-            onChange={(e) => setFormData({ ...formData, dailyStartTime: e.target.value })}
-            className={errors.dailyStartTime || errors.time ? "border-red-500" : ""}
+            onChange={(val) => setFormData({ ...formData, dailyStartTime: val })}
+            error={errors.dailyStartTime || errors.time}
           />
           {errors.dailyStartTime && <p className="text-red-500 text-xs mt-1">{errors.dailyStartTime}</p>}
         </div>
@@ -127,15 +127,13 @@ export function ScheduleForm({ onSubmit, onCancel, isLoading, initialData = null
           <label className="block text-sm font-medium text-gray-700 mb-1">
             End Time <span className="text-red-500">*</span>
           </label>
-          <Input
-            type="time"
+          <TimePicker
             value={formData.dailyEndTime}
-            onChange={(e) => setFormData({ ...formData, dailyEndTime: e.target.value })}
-            className={errors.dailyEndTime || errors.time ? "border-red-500" : ""}
+            onChange={(val) => setFormData({ ...formData, dailyEndTime: val })}
+            error={errors.dailyEndTime || errors.time}
           />
           {errors.dailyEndTime && <p className="text-red-500 text-xs mt-1">{errors.dailyEndTime}</p>}
         </div>
-        {errors.time && <div className="col-span-2 text-red-500 text-xs -mt-2">{errors.time}</div>}
       </div>
 
       <div>

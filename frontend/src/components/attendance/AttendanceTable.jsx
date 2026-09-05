@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Table } from "../ui/Table";
+import { DataTable } from "../ui/DataTable";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { formatTime, formatHours } from "../../utils/timeUtils";
@@ -119,7 +119,7 @@ export function AttendanceTable({ data, isLoading, onSort, sortField, sortDirect
   );
 
   return (
-    <Table
+    <DataTable
       columns={columns}
       data={data}
       keyExtractor={(item) => item.id}

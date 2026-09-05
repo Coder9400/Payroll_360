@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../../utils/cn";
 
-const Select = React.forwardRef(({ className, error, options = [], ...props }, ref) => {
+const Select = React.forwardRef(({ className, error, options = [], children, ...props }, ref) => {
   return (
     <div className="w-full">
       <select
@@ -13,12 +13,16 @@ const Select = React.forwardRef(({ className, error, options = [], ...props }, r
         ref={ref}
         {...props}
       >
-        <option value="" disabled>Select an option</option>
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
+        {children ? children : (
+          <>
+            <option value="" disabled>Select an option</option>
+            {options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </>
+        )}
       </select>
       {error && <span className="text-sm text-danger mt-1">{error}</span>}
     </div>
