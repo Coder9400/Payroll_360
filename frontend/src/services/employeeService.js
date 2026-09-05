@@ -1,217 +1,70 @@
 /**
- * Employee Service (Mock)
- * ─────────────────────────
- * Phase 03: Provides isolated mock data and async methods.
- * Replace internals with real API calls (e.g. axios.get('/api/employees'))
- * when the backend is ready, keeping the same method signatures.
+ * Employee Service
+ * ────────────────
+ * Real API calls to the PeoplePay360 backend.
+ * All data persists in Supabase PostgreSQL.
  */
 
-// Initial mock data
-let mockEmployees = [
-  {
-    id: 'emp-1',
-    employeeId: 'EMP-001',
-    firstName: 'Rahul',
-    lastName: 'Sharma',
-    email: 'rahul@example.com',
-    phone: '+91 9876543210',
-    department: 'Engineering',
-    position: 'Software Developer',
-    manager: 'emp-2', // ID of Priya Shah
-    employeeType: 'Full Time',
-    joiningDate: '2025-08-15',
-    status: 'Active',
-    workEmail: 'rahul.s@peoplepay.dev',
-    workPhone: '+91 8888888888',
-    dob: '1995-04-12',
-  },
-  {
-    id: 'emp-2',
-    employeeId: 'EMP-002',
-    firstName: 'Priya',
-    lastName: 'Shah',
-    email: 'priya@example.com',
-    phone: '+91 9876543211',
-    department: 'Engineering',
-    position: 'Engineering Manager',
-    manager: null,
-    employeeType: 'Full Time',
-    joiningDate: '2023-01-10',
-    status: 'Active',
-    workEmail: 'priya.s@peoplepay.dev',
-    workPhone: '+91 8888888889',
-    dob: '1988-11-20',
-  },
-  {
-    id: 'emp-3',
-    employeeId: 'EMP-003',
-    firstName: 'Amit',
-    lastName: 'Patel',
-    email: 'amit@example.com',
-    phone: '+91 9876543212',
-    department: 'HR',
-    position: 'HR Manager',
-    manager: null,
-    employeeType: 'Full Time',
-    joiningDate: '2022-05-01',
-    status: 'Active',
-    workEmail: 'amit.p@peoplepay.dev',
-    workPhone: '+91 8888888890',
-    dob: '1990-07-05',
-  },
-  {
-    id: 'emp-4',
-    employeeId: 'EMP-004',
-    firstName: 'Neha',
-    lastName: 'Gupta',
-    email: 'neha@example.com',
-    phone: '+91 9876543213',
-    department: 'Marketing',
-    position: 'Marketing Specialist',
-    manager: 'emp-5',
-    employeeType: 'Part Time',
-    joiningDate: '2024-02-15',
-    status: 'On Leave',
-    workEmail: 'neha.g@peoplepay.dev',
-    workPhone: '',
-    dob: '1998-09-15',
-  },
-  {
-    id: 'emp-5',
-    employeeId: 'EMP-005',
-    firstName: 'Vikram',
-    lastName: 'Singh',
-    email: 'vikram@example.com',
-    phone: '+91 9876543214',
-    department: 'Marketing',
-    position: 'CMO',
-    manager: null,
-    employeeType: 'Full Time',
-    joiningDate: '2021-11-01',
-    status: 'Active',
-    workEmail: 'vikram.s@peoplepay.dev',
-    workPhone: '+91 8888888891',
-    dob: '1985-02-28',
-  },
-  {
-    id: 'emp-6',
-    employeeId: 'EMP-006',
-    firstName: 'Anjali',
-    lastName: 'Deshmukh',
-    email: 'anjali@example.com',
-    phone: '+91 9876543215',
-    department: 'Finance',
-    position: 'Payroll Specialist',
-    manager: null,
-    employeeType: 'Full Time',
-    joiningDate: '2025-01-10',
-    status: 'Probation',
-    workEmail: 'anjali.d@peoplepay.dev',
-    workPhone: '',
-    dob: '1996-12-10',
-  },
-  {
-    id: 'emp-7',
-    employeeId: 'EMP-007',
-    firstName: 'Suresh',
-    lastName: 'Kumar',
-    email: 'suresh@example.com',
-    phone: '+91 9876543216',
-    department: 'Operations',
-    position: 'Operations Manager',
-    manager: null,
-    employeeType: 'Contract',
-    joiningDate: '2024-06-01',
-    status: 'Inactive',
-    workEmail: 'suresh.k@peoplepay.dev',
-    workPhone: '+91 8888888892',
-    dob: '1982-08-25',
-  }
-];
+import api from './api';
 
-// Helper to simulate network delay
-const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
+// ─── Response helper ──────────────────────────────────────────────────────────
+function unwrap(response) {
+  return response.data?.data ?? response.data;
+}
+
+// ─── Field name mapper: backend (snake_case) → frontend (camelCase) ───────────
+function mapEmployee(e) {
+  if (!e) return null;
+  return {
+    id:           e.id,
+    employeeId:   e.employee_code,
+    firstName:    e.first_name,
+    lastName:     e.last_name,
+    email:        e.email,
+    phone:        e.phone ?? '',
+    department:   e.department?.name ?? e.department_id ?? '',
+    departmentId: e.department_id,
+    position:     e.job_position?.name ?? e.job_position_id ?? '',
+    jobPositionId:e.job_position_id,
+    manager:      e.manager_id ?? null,
+    managerName:  e.manager ? `${e.manager.first_name} ${e.manager.last_name}` : null,
+    employeeType: e.employee_type,
+    joiningDate:  e.date_of_joining,
+    dob:          e.date_of_birth ?? '',
+    status:       e.employment_status,
+    workingScheduleId: e.working_schedule_id,
+    address:      e.address ?? '',
+    bankAccount:  e.bank_account ?? '',
+    createdAt:    e.created_at,
+  };
+}
 
 export const employeeService = {
   /**
-   * Get paginated, filtered, and sorted employees
+   * Get paginated, filtered employees
    */
   async getEmployees(params = {}) {
-    await delay();
-    
-    const {
-      page = 1,
-      limit = 10,
-      search = '',
-      department = '',
-      position = '',
-      status = '',
-      employeeType = '',
-      manager = '',
-      sortBy = 'joiningDate',
-      sortOrder = 'desc' // 'asc' or 'desc'
-    } = params;
+    const query = new URLSearchParams();
+    if (params.page)         query.set('page', params.page);
+    if (params.limit)        query.set('limit', params.limit);
+    if (params.search)       query.set('search', params.search);
+    if (params.department)   query.set('department_id', params.department);
+    if (params.status)       query.set('employment_status', params.status);
+    if (params.employeeType) query.set('employee_type', params.employeeType);
+    if (params.sortBy)       query.set('sort_by', params.sortBy);
+    if (params.sortOrder)    query.set('sort_order', params.sortOrder);
 
-    let results = [...mockEmployees];
-
-    // Filter
-    if (search) {
-      const s = search.toLowerCase();
-      results = results.filter(
-        (e) =>
-          e.firstName.toLowerCase().includes(s) ||
-          e.lastName.toLowerCase().includes(s) ||
-          e.email.toLowerCase().includes(s) ||
-          e.employeeId.toLowerCase().includes(s)
-      );
-    }
-    if (department) results = results.filter((e) => e.department === department);
-    if (position) results = results.filter((e) => e.position === position);
-    if (status) results = results.filter((e) => e.status === status);
-    if (employeeType) results = results.filter((e) => e.employeeType === employeeType);
-    if (manager) results = results.filter((e) => e.manager === manager);
-
-    // Sort
-    results.sort((a, b) => {
-      let valA = a[sortBy];
-      let valB = b[sortBy];
-      
-      if (sortBy === 'name') {
-        valA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        valB = `${b.firstName} ${b.lastName}`.toLowerCase();
-      } else if (typeof valA === 'string') {
-        valA = valA.toLowerCase();
-        valB = valB?.toLowerCase() || '';
-      }
-
-      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
-      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    // Resolve manager references for the UI
-    const enrichedResults = results.map(emp => {
-      if (emp.manager) {
-        const mgr = mockEmployees.find(m => m.id === emp.manager);
-        return { ...emp, managerName: mgr ? `${mgr.firstName} ${mgr.lastName}` : 'Unknown' };
-      }
-      return { ...emp, managerName: null };
-    });
-
-    // Paginate
-    const total = enrichedResults.length;
-    const totalPages = Math.ceil(total / limit);
-    const start = (page - 1) * limit;
-    const paginatedResults = enrichedResults.slice(start, start + limit);
+    const response = await api.get(`/employees?${query.toString()}`);
+    const payload  = unwrap(response);
 
     return {
-      data: paginatedResults,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages
-      }
+      data: (payload.employees ?? payload.data ?? []).map(mapEmployee),
+      meta: payload.pagination ?? payload.meta ?? {
+        total: payload.total ?? 0,
+        page:  params.page ?? 1,
+        limit: params.limit ?? 10,
+        totalPages: Math.ceil((payload.total ?? 0) / (params.limit ?? 10)),
+      },
     };
   },
 
@@ -219,88 +72,101 @@ export const employeeService = {
    * Get single employee by ID
    */
   async getEmployee(id) {
-    await delay();
-    const emp = mockEmployees.find((e) => e.id === id);
-    if (!emp) throw new Error('Employee not found');
-    
-    // Resolve manager
-    let managerName = null;
-    if (emp.manager) {
-      const mgr = mockEmployees.find(m => m.id === emp.manager);
-      managerName = mgr ? `${mgr.firstName} ${mgr.lastName}` : 'Unknown';
-    }
-
-    return { ...emp, managerName };
+    const response = await api.get(`/employees/${id}`);
+    return mapEmployee(unwrap(response));
   },
 
   /**
    * Create new employee
    */
   async createEmployee(data) {
-    await delay();
-    
-    // Check if employeeId is unique
-    if (mockEmployees.some(e => e.employeeId === data.employeeId)) {
-      throw new Error(`Employee ID ${data.employeeId} already exists.`);
-    }
-
-    const newEmp = {
-      ...data,
-      id: `emp-${Date.now()}` // Mock UUID
+    const payload = {
+      employee_code:      data.employeeId,
+      first_name:         data.firstName,
+      last_name:          data.lastName,
+      email:              data.email,
+      phone:              data.phone || null,
+      date_of_birth:      data.dob || null,
+      date_of_joining:    data.joiningDate,
+      department_id:      data.departmentId,
+      job_position_id:    data.jobPositionId,
+      manager_id:         data.manager || null,
+      working_schedule_id:data.workingScheduleId,
+      employee_type:      data.employeeType?.toUpperCase().replace(' ', '_') ?? 'FULL_TIME',
+      employment_status:  data.status?.toUpperCase() ?? 'ACTIVE',
+      address:            data.address || null,
+      bank_account:       data.bankAccount || null,
+      user_id:            data.userId || null,
     };
-    mockEmployees = [newEmp, ...mockEmployees];
-    return newEmp;
+    const response = await api.post('/employees', payload);
+    return mapEmployee(unwrap(response));
   },
 
   /**
-   * Update existing employee
+   * Update employee
    */
   async updateEmployee(id, data) {
-    await delay();
-    const index = mockEmployees.findIndex((e) => e.id === id);
-    if (index === -1) throw new Error('Employee not found');
+    const payload = {};
+    if (data.firstName)        payload.first_name        = data.firstName;
+    if (data.lastName)         payload.last_name         = data.lastName;
+    if (data.email)            payload.email             = data.email;
+    if (data.phone !== undefined) payload.phone          = data.phone;
+    if (data.dob)              payload.date_of_birth     = data.dob;
+    if (data.joiningDate)      payload.date_of_joining   = data.joiningDate;
+    if (data.departmentId)     payload.department_id     = data.departmentId;
+    if (data.jobPositionId)    payload.job_position_id   = data.jobPositionId;
+    if (data.manager !== undefined) payload.manager_id   = data.manager || null;
+    if (data.workingScheduleId) payload.working_schedule_id = data.workingScheduleId;
+    if (data.employeeType)     payload.employee_type     = data.employeeType?.toUpperCase().replace(' ', '_');
+    if (data.status)           payload.employment_status = data.status?.toUpperCase();
+    if (data.address !== undefined) payload.address      = data.address;
+    if (data.bankAccount !== undefined) payload.bank_account = data.bankAccount;
 
-    // Check if new employeeId (if changed) is unique
-    if (data.employeeId && data.employeeId !== mockEmployees[index].employeeId) {
-       if (mockEmployees.some(e => e.employeeId === data.employeeId)) {
-         throw new Error(`Employee ID ${data.employeeId} already exists.`);
-       }
-    }
-
-    mockEmployees[index] = { ...mockEmployees[index], ...data };
-    return mockEmployees[index];
+    const response = await api.put(`/employees/${id}`, payload);
+    return mapEmployee(unwrap(response));
   },
 
   /**
    * Deactivate employee
    */
   async deactivateEmployee(id) {
-    await delay();
-    const index = mockEmployees.findIndex((e) => e.id === id);
-    if (index === -1) throw new Error('Employee not found');
-    
-    mockEmployees[index] = { ...mockEmployees[index], status: 'Inactive' };
-    return mockEmployees[index];
+    const response = await api.patch(`/employees/${id}/deactivate`);
+    return mapEmployee(unwrap(response));
   },
 
   /**
-   * Get all options for dropdowns (departments, positions)
-   * This would typically come from reference data APIs
+   * Get reference data for dropdowns
    */
   async getReferenceData() {
-    await delay(100);
+    const [deptRes, posRes, schedRes] = await Promise.all([
+      api.get('/departments?is_active=true&limit=200'),
+      api.get('/job-positions?is_active=true&limit=200'),
+      api.get('/schedules?limit=200'),
+    ]);
+
+    const departments = (unwrap(deptRes).departments ?? unwrap(deptRes).data ?? [])
+      .map(d => ({ id: d.id, value: d.id, label: d.name, name: d.name }));
+
+    const positions = (unwrap(posRes).job_positions ?? unwrap(posRes).data ?? [])
+      .map(p => ({ id: p.id, value: p.id, label: p.name, name: p.name, departmentId: p.department_id }));
+
+    const schedules = (unwrap(schedRes).schedules ?? unwrap(schedRes).data ?? [])
+      .map(s => ({ id: s.id, value: s.id, label: `${s.name} (${s.hours_week}h/wk)`, name: s.name }));
+
+    // Fetch active employees for manager dropdown
+    const empRes = await api.get('/employees?employment_status=ACTIVE&limit=500');
+    const managers = (unwrap(empRes).employees ?? unwrap(empRes).data ?? [])
+      .map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.employee_code})` }));
+
     return {
-      departments: ['Engineering', 'HR', 'Marketing', 'Finance', 'Operations', 'Sales'],
-      positions: [
-        'Software Developer', 'Engineering Manager', 'HR Manager', 
-        'Marketing Specialist', 'CMO', 'Payroll Specialist', 'Operations Manager'
-      ],
-      employeeTypes: ['Full Time', 'Part Time', 'Contract', 'Intern'],
-      statuses: ['Active', 'Inactive', 'On Leave', 'Probation', 'Terminated'],
-      // Get list of active employees for Manager dropdown
-      managers: mockEmployees
-        .filter(e => e.status !== 'Inactive' && e.status !== 'Terminated')
-        .map(e => ({ value: e.id, label: `${e.firstName} ${e.lastName} (${e.employeeId})` }))
+      departments:   departments.map(d => d.name),
+      departmentOptions: departments,
+      positions:     positions.map(p => p.name),
+      positionOptions: positions,
+      schedules,
+      employeeTypes: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'],
+      statuses:      ['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'PROBATION', 'TERMINATED'],
+      managers,
     };
-  }
+  },
 };

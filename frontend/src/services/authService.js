@@ -1,144 +1,120 @@
 /**
  * Auth Service
- * -----------
- * Stubs for backend auth API endpoints.
- * Replace mock implementations with real API calls when the backend is ready.
+ * ────────────
+ * Real backend authentication. Calls the PeoplePay360 Express API.
  *
- * Expected backend endpoints:
- *   POST /auth/login   → { token, user }
- *   POST /auth/logout  → 204
- *   GET  /auth/me      → user object
+ * Backend endpoints consumed:
+ *   POST /api/auth/login   → { success, data: { user, session, profile, roles, permissions } }
+ *   POST /api/auth/logout  → { success }
+ *   GET  /api/auth/me      → { success, data: { id, email, profile, roles, permissions, employee } }
  */
 
 import api from './api';
 
-// ─── DEV-ONLY MOCK USERS ─────────────────────────────────────────────────────
-// Remove or replace this block when connecting to the real backend.
-const DEV_MOCK_USERS = [
-  {
-    id: 'usr-001',
-    name: 'Alice Johnson',
-    email: 'alice@peoplepay.dev',
-    password: 'dev123',
-    role: 'Employee',
-    avatar: null,
-    department: 'Engineering',
-    jobTitle: 'Software Engineer',
-  },
-  {
-    id: 'usr-002',
-    name: 'Bob Martinez',
-    email: 'bob@peoplepay.dev',
-    password: 'dev123',
-    role: 'HR Manager',
-    avatar: null,
-    department: 'Human Resources',
-    jobTitle: 'HR Manager',
-  },
-  {
-    id: 'usr-003',
-    name: 'Carol Singh',
-    email: 'carol@peoplepay.dev',
-    password: 'dev123',
-    role: 'HR Payroll User',
-    avatar: null,
-    department: 'Finance',
-    jobTitle: 'Payroll Specialist',
-  },
-  {
-    id: 'usr-004',
-    name: 'David Chen',
-    email: 'david@peoplepay.dev',
-    password: 'dev123',
-    role: 'HR Payroll Manager',
-    avatar: null,
-    department: 'Finance',
-    jobTitle: 'Payroll Manager',
-  },
-  {
-    id: 'usr-005',
-    name: 'Eva Williams',
-    email: 'eva@peoplepay.dev',
-    password: 'dev123',
-    role: 'Admin',
-    avatar: null,
-    department: 'IT',
-    jobTitle: 'System Administrator',
-  },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Token key names in localStorage ─────────────────────────────────────────
+const TOKEN_KEY = 'pp360_token';
+const USER_KEY  = 'pp360_user';
 
-const IS_DEV = import.meta.env.DEV;
+// ─── Role slug → display name mapping ────────────────────────────────────────
+const ROLE_DISPLAY = {
+  admin:              'Admin',
+  hr_payroll_manager: 'HR Payroll Manager',
+  hr_payroll_user:    'HR Payroll User',
+  hr_manager:         'HR Manager',
+  employee:           'Employee',
+};
+
+/**
+ * Map backend user response → frontend user object
+ */
+function mapUser(data) {
+  const slug = data.roles?.[0] ?? 'employee';
+  return {
+    id:          data.id ?? data.user?.id,
+    email:       data.email ?? data.user?.email,
+    name:        data.profile
+      ? `${data.profile.first_name ?? ''} ${data.profile.last_name ?? ''}`.trim()
+      : (data.email ?? ''),
+    role:        ROLE_DISPLAY[slug] ?? slug,
+    roleSlug:    slug,
+    roles:       data.roles ?? [],
+    permissions: data.permissions ?? [],
+    employee:    data.employee ?? null,
+    avatar:      data.profile?.avatar_url ?? null,
+  };
+}
 
 /**
  * Login with email + password.
- * In production, this will POST /auth/login and store the JWT token.
+ * Stores token and user in localStorage for session persistence.
  */
 export async function login(email, password) {
-  if (IS_DEV) {
-    // DEV: find mock user
-    const user = DEV_MOCK_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
-    if (!user) {
-      throw new Error('Invalid credentials. Use any dev user with password: dev123');
-    }
-    const { password: _pw, ...safeUser } = user;
-    localStorage.setItem('dev_current_user', JSON.stringify(safeUser));
-    return { user: safeUser, token: 'dev-token' };
-  }
-
-  // PRODUCTION: replace mock with real API call
   const response = await api.post('/auth/login', { email, password });
-  const { token, user } = response.data;
-  localStorage.setItem('token', token);
+  const { data } = response.data; // { user, session, profile, roles, permissions }
+
+  const token = data.session?.access_token;
+  if (!token) throw new Error('No access token received from server');
+
+  localStorage.setItem(TOKEN_KEY, token);
+
+  const user = mapUser({ ...data.user, ...data, profile: data.profile });
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+
   return { user, token };
 }
 
 /**
- * Logout the current user.
+ * Logout current user.
+ * Clears local session regardless of backend response.
  */
 export async function logout() {
-  if (IS_DEV) {
-    localStorage.removeItem('dev_current_user');
-    return;
-  }
   try {
     await api.post('/auth/logout');
+  } catch {
+    // Always clear local session even if backend call fails
   } finally {
-    localStorage.removeItem('token');
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
   }
 }
 
 /**
  * Get the currently authenticated user.
- * In production, this will GET /auth/me using the stored token.
+ * Called on app mount to restore session.
+ * Returns null if no token or token is invalid.
  */
 export async function getCurrentUser() {
-  if (IS_DEV) {
-    const stored = localStorage.getItem('dev_current_user');
-    return stored ? JSON.parse(stored) : null;
-  }
-
-  // PRODUCTION: replace mock with real API call
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return null;
-  const response = await api.get('/auth/me');
-  return response.data;
+
+  try {
+    const response = await api.get('/auth/me');
+    const data = response.data?.data ?? response.data;
+    const user = mapUser(data);
+    // Refresh cached user
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    return user;
+  } catch (err) {
+    // 401 is handled by api.js interceptor (clears token + redirects)
+    // For other errors return cached user if available
+    const cached = localStorage.getItem(USER_KEY);
+    if (cached) {
+      try { return JSON.parse(cached); } catch { /* ignore */ }
+    }
+    return null;
+  }
 }
 
-/**
- * DEV-ONLY: Switch to a different role without re-authenticating.
- * This will be removed when connecting to the real backend.
- */
-export function devSwitchRole(role) {
-  if (!IS_DEV) return;
-  const user = DEV_MOCK_USERS.find((u) => u.role === role);
-  if (!user) return;
-  const { password: _pw, ...safeUser } = user;
-  localStorage.setItem('dev_current_user', JSON.stringify(safeUser));
-  return safeUser;
-}
+// ─── Role constants (matches App.jsx role strings) ────────────────────────────
+export const ALL_ROLES = [
+  'Employee',
+  'HR Manager',
+  'HR Payroll User',
+  'HR Payroll Manager',
+  'Admin',
+];
 
-export const DEV_USERS = IS_DEV ? DEV_MOCK_USERS.map(({ password: _pw, ...u }) => u) : [];
-export const ALL_ROLES = ['Employee', 'HR Manager', 'HR Payroll User', 'HR Payroll Manager', 'Admin'];
+// ─── DEV-ONLY: role switcher (no-op in production) ───────────────────────────
+export function devSwitchRole() {
+  // No-op — real backend enforces roles
+}

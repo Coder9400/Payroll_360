@@ -1,0 +1,97 @@
+/**
+ * Time Off Domain Constants
+ * Centralizes all status values, error codes, and business rules for the Time Off module.
+ */
+
+/**
+ * Time Off Allocation statuses
+ */
+const ALLOCATION_STATUS = {
+  DRAFT: 'DRAFT',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REFUSED: 'REFUSED',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
+};
+
+/**
+ * Time Off Request statuses
+ */
+const REQUEST_STATUS = {
+  DRAFT: 'DRAFT',
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REFUSED: 'REFUSED',
+  CANCELLED: 'CANCELLED',
+};
+
+/**
+ * Valid state transitions for Time Off Requests.
+ * Only transitions listed here are allowed.
+ * Rationale: prevents nonsensical transitions like REFUSED → APPROVED.
+ */
+const VALID_REQUEST_TRANSITIONS = {
+  [REQUEST_STATUS.DRAFT]: [REQUEST_STATUS.PENDING, REQUEST_STATUS.CANCELLED],
+  [REQUEST_STATUS.PENDING]: [REQUEST_STATUS.APPROVED, REQUEST_STATUS.REFUSED, REQUEST_STATUS.CANCELLED],
+  // Approved requests can only be cancelled (not re-approved or re-refused)
+  [REQUEST_STATUS.APPROVED]: [REQUEST_STATUS.CANCELLED],
+  // Terminal states — no transitions allowed
+  [REQUEST_STATUS.REFUSED]: [],
+  [REQUEST_STATUS.CANCELLED]: [],
+};
+
+/**
+ * Valid state transitions for Allocations.
+ */
+const VALID_ALLOCATION_TRANSITIONS = {
+  [ALLOCATION_STATUS.DRAFT]: [ALLOCATION_STATUS.PENDING_APPROVAL, ALLOCATION_STATUS.CANCELLED],
+  [ALLOCATION_STATUS.PENDING_APPROVAL]: [ALLOCATION_STATUS.APPROVED, ALLOCATION_STATUS.REFUSED, ALLOCATION_STATUS.CANCELLED],
+  [ALLOCATION_STATUS.APPROVED]: [ALLOCATION_STATUS.EXPIRED, ALLOCATION_STATUS.CANCELLED],
+  [ALLOCATION_STATUS.REFUSED]: [],
+  [ALLOCATION_STATUS.EXPIRED]: [],
+  [ALLOCATION_STATUS.CANCELLED]: [],
+};
+
+/**
+ * Time off unit types (matches time_off_types.unit)
+ */
+const TIME_OFF_UNIT = {
+  DAYS: 'DAYS',
+  HOURS: 'HOURS',
+};
+
+/**
+ * Domain-specific error codes for Time Off operations
+ */
+const TIME_OFF_ERRORS = {
+  TYPE_NOT_FOUND: 'TIME_OFF_TYPE_NOT_FOUND',
+  ALLOCATION_NOT_FOUND: 'ALLOCATION_NOT_FOUND',
+  ALLOCATION_EXPIRED: 'ALLOCATION_EXPIRED',
+  ALLOCATION_NOT_ACTIVE: 'ALLOCATION_NOT_ACTIVE',
+  INSUFFICIENT_BALANCE: 'INSUFFICIENT_TIME_OFF_BALANCE',
+  REQUEST_OVERLAP: 'TIME_OFF_REQUEST_OVERLAP',
+  INVALID_STATE_TRANSITION: 'INVALID_TIME_OFF_STATE',
+  APPROVAL_NOT_ALLOWED: 'TIME_OFF_APPROVAL_NOT_ALLOWED',
+  REQUEST_NOT_FOUND: 'TIME_OFF_REQUEST_NOT_FOUND',
+  SELF_APPROVAL: 'TIME_OFF_SELF_APPROVAL_NOT_ALLOWED',
+  NO_VALID_ALLOCATION: 'NO_VALID_ALLOCATION_FOUND',
+  EMPLOYEE_NOT_FOUND: 'EMPLOYEE_NOT_FOUND',
+};
+
+/**
+ * Allocation selection strategy for multiple valid allocations:
+ * EARLIEST_EXPIRY_FIRST — prioritizes the allocation that expires soonest.
+ * This prevents leave from going to waste on older allocations.
+ */
+const ALLOCATION_SELECTION_STRATEGY = 'EARLIEST_EXPIRY_FIRST';
+
+module.exports = {
+  ALLOCATION_STATUS,
+  REQUEST_STATUS,
+  VALID_REQUEST_TRANSITIONS,
+  VALID_ALLOCATION_TRANSITIONS,
+  TIME_OFF_UNIT,
+  TIME_OFF_ERRORS,
+  ALLOCATION_SELECTION_STRATEGY,
+};

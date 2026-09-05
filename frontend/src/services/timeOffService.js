@@ -1,220 +1,238 @@
-// Mock data for Phase 05 Time Off Module
+/**
+ * Time Off Service
+ * ─────────────────
+ * Real API calls to the PeoplePay360 backend.
+ * All data persists in Supabase PostgreSQL.
+ */
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+import api from './api';
 
-let mockLeaveTypes = [
-  { id: 'LT-01', name: 'Annual Leave', code: 'AL', isPaid: true, requiresAllocation: true, isActive: true },
-  { id: 'LT-02', name: 'Sick Leave', code: 'SL', isPaid: true, requiresAllocation: true, isActive: true },
-  { id: 'LT-03', name: 'Unpaid Leave', code: 'UL', isPaid: false, requiresAllocation: false, isActive: true },
-];
+function unwrap(response) {
+  return response.data?.data ?? response.data;
+}
 
-let mockAllocations = [
-  { id: 'LA-01', employeeId: 'EMP-001', employeeName: 'Rahul Sharma', leaveTypeId: 'LT-01', leaveTypeName: 'Annual Leave', year: 2026, allocated: 20, used: 8, pending: 2, remaining: 10, status: 'Active' },
-  { id: 'LA-02', employeeId: 'EMP-001', employeeName: 'Rahul Sharma', leaveTypeId: 'LT-02', leaveTypeName: 'Sick Leave', year: 2026, allocated: 12, used: 3, pending: 0, remaining: 9, status: 'Active' },
-  { id: 'LA-03', employeeId: 'EMP-002', employeeName: 'Priya Patel', leaveTypeId: 'LT-01', leaveTypeName: 'Annual Leave', year: 2026, allocated: 22, used: 5, pending: 0, remaining: 17, status: 'Active' },
-];
+// Map backend time_off_type → frontend format
+function mapType(t) {
+  if (!t) return null;
+  return {
+    id:                 t.id,
+    name:               t.name,
+    code:               t.code,
+    unit:               t.unit ?? 'DAYS',
+    isPaid:             t.payroll_integration ?? true,
+    requiresAllocation: t.requires_allocation,
+    requiresApproval:   t.requires_approval,
+    isActive:           t.is_active,
+  };
+}
 
-let mockRequests = [
-  { id: 'REQ-001', employeeId: 'EMP-001', employeeName: 'Rahul Sharma', department: 'Engineering', leaveTypeId: 'LT-01', leaveTypeName: 'Annual Leave', startDate: '2026-09-10', endDate: '2026-09-11', duration: 2, reason: 'Family trip', status: 'Pending', submittedAt: '2026-09-01T10:00:00Z', managerComment: '' },
-  { id: 'REQ-002', employeeId: 'EMP-001', employeeName: 'Rahul Sharma', department: 'Engineering', leaveTypeId: 'LT-02', leaveTypeName: 'Sick Leave', startDate: '2026-08-15', endDate: '2026-08-17', duration: 3, reason: 'Flu', status: 'Approved', submittedAt: '2026-08-15T08:00:00Z', managerComment: 'Get well soon.' },
-  { id: 'REQ-003', employeeId: 'EMP-002', employeeName: 'Priya Patel', department: 'Sales', leaveTypeId: 'LT-01', leaveTypeName: 'Annual Leave', startDate: '2026-09-20', endDate: '2026-09-24', duration: 5, reason: 'Vacation', status: 'Pending', submittedAt: '2026-09-02T11:00:00Z', managerComment: '' },
-];
+// Map backend allocation → frontend format
+function mapAllocation(a) {
+  if (!a) return null;
+  const empName = a.employee
+    ? `${a.employee.first_name} ${a.employee.last_name}`
+    : (a.employee_name ?? '');
+  return {
+    id:            a.id,
+    employeeId:    a.employee_id,
+    employeeName:  empName,
+    leaveTypeId:   a.time_off_type_id,
+    leaveTypeName: a.time_off_type?.name ?? '',
+    year:          a.valid_from ? new Date(a.valid_from).getFullYear() : new Date().getFullYear(),
+    allocated:     Number(a.allocated_amount ?? 0),
+    approved:      Number(a.approved_amount ?? 0),
+    taken:         Number(a.taken_amount ?? 0),
+    remaining:     Number(a.remaining_amount ?? 0),
+    validFrom:     a.valid_from,
+    validTo:       a.valid_to,
+    status:        a.status,
+    // Legacy field aliases for existing frontend components
+    used:          Number(a.taken_amount ?? 0),
+    pending:       0,
+  };
+}
+
+// Map backend time_off_request → frontend format
+function mapRequest(r) {
+  if (!r) return null;
+  const empName = r.employee
+    ? `${r.employee.first_name} ${r.employee.last_name}`
+    : (r.employee_name ?? '');
+  return {
+    id:              r.id,
+    employeeId:      r.employee_id,
+    employeeName:    empName,
+    department:      r.employee?.department?.name ?? '',
+    leaveTypeId:     r.time_off_type_id,
+    leaveTypeName:   r.time_off_type?.name ?? '',
+    startDate:       r.start_date,
+    endDate:         r.end_date,
+    duration:        Number(r.duration ?? 0),
+    unit:            r.unit ?? 'DAYS',
+    reason:          r.reason ?? '',
+    status:          capitalise(r.status),
+    submittedAt:     r.created_at,
+    approvedBy:      r.approved_by,
+    approvedAt:      r.approved_at,
+    refusalReason:   r.refusal_reason,
+    managerComment:  r.refusal_reason ?? '',
+  };
+}
+
+function capitalise(s) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
 
 export const timeOffService = {
-  // ── Leave Types ────────────────────────────────────────────────────────
-  async getLeaveTypes() {
-    await delay(300);
-    return [...mockLeaveTypes];
+  // ── Leave Types ─────────────────────────────────────────────────────────────
+
+  async getLeaveTypes(params = {}) {
+    const query = new URLSearchParams();
+    if (params.is_active !== undefined) query.set('is_active', params.is_active);
+    const response = await api.get(`/time-off/types?${query.toString()}`);
+    const payload  = unwrap(response);
+    return (payload.time_off_types ?? payload.data ?? []).map(mapType);
   },
-  
+
   async createLeaveType(data) {
-    await delay(500);
-    const newType = {
-      id: `LT-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-      ...data
+    const payload = {
+      name:               data.name,
+      code:               data.code,
+      unit:               data.unit ?? 'DAYS',
+      requires_allocation: data.requiresAllocation ?? true,
+      requires_approval:   data.requiresApproval ?? true,
+      payroll_integration: data.isPaid ?? true,
+      is_active:           data.isActive ?? true,
     };
-    mockLeaveTypes.push(newType);
-    return newType;
+    const response = await api.post('/time-off/types', payload);
+    return mapType(unwrap(response));
   },
 
   async updateLeaveType(id, data) {
-    await delay(500);
-    const index = mockLeaveTypes.findIndex(t => t.id === id);
-    if (index === -1) throw new Error("Leave type not found");
-    mockLeaveTypes[index] = { ...mockLeaveTypes[index], ...data };
-    return mockLeaveTypes[index];
+    const payload = {};
+    if (data.name !== undefined)               payload.name = data.name;
+    if (data.code !== undefined)               payload.code = data.code;
+    if (data.requiresAllocation !== undefined) payload.requires_allocation = data.requiresAllocation;
+    if (data.requiresApproval !== undefined)   payload.requires_approval   = data.requiresApproval;
+    if (data.isPaid !== undefined)             payload.payroll_integration  = data.isPaid;
+    if (data.isActive !== undefined)           payload.is_active            = data.isActive;
+    const response = await api.put(`/time-off/types/${id}`, payload);
+    return mapType(unwrap(response));
   },
 
-  // ── Allocations & Balances ───────────────────────────────────────────────
+  // ── Allocations ──────────────────────────────────────────────────────────────
+
   async getLeaveAllocations(params = {}) {
-    await delay(400);
-    let results = [...mockAllocations];
-    if (params.employeeId) {
-      results = results.filter(a => a.employeeId === params.employeeId);
-    }
-    return results;
+    const query = new URLSearchParams();
+    if (params.page)        query.set('page', params.page);
+    if (params.limit)       query.set('limit', params.limit ?? 100);
+    if (params.employeeId)  query.set('employee_id', params.employeeId);
+    if (params.status)      query.set('status', params.status);
+    const response = await api.get(`/time-off/allocations?${query.toString()}`);
+    const payload  = unwrap(response);
+    return (payload.allocations ?? payload.data ?? []).map(mapAllocation);
   },
 
   async getEmployeeLeaveBalance(employeeId, params = {}) {
-    await delay(300);
-    const year = params.year || new Date().getFullYear();
-    // Return all allocations for this employee for the given year
-    return mockAllocations.filter(a => a.employeeId === employeeId && a.year === year);
+    const response = await api.get(`/employees/${employeeId}/time-off/balances`);
+    const payload  = unwrap(response);
+    return (payload.balances ?? payload.data ?? []).map(mapAllocation);
   },
 
   async createLeaveAllocation(data) {
-    await delay(600);
-    // Find the leave type name
-    const lt = mockLeaveTypes.find(t => t.id === data.leaveTypeId);
-    if (!lt) throw new Error("Leave type not found");
-
-    const newAlloc = {
-      id: `LA-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-      employeeName: data.employeeName || 'Unknown Employee',
-      leaveTypeName: lt.name,
-      used: 0,
-      pending: 0,
-      remaining: data.allocated,
-      status: 'Active',
-      ...data
+    const payload = {
+      employee_id:      data.employeeId,
+      time_off_type_id: data.leaveTypeId,
+      allocated_amount: data.allocated ?? data.allocatedAmount,
+      valid_from:       data.validFrom ?? `${data.year ?? new Date().getFullYear()}-01-01`,
+      valid_to:         data.validTo   ?? `${data.year ?? new Date().getFullYear()}-12-31`,
     };
-    mockAllocations.push(newAlloc);
-    return newAlloc;
+    const response = await api.post('/time-off/allocations', payload);
+    return mapAllocation(unwrap(response));
   },
 
-  // ── Leave Requests ────────────────────────────────────────────────────────
+  async approveAllocation(id) {
+    const response = await api.post(`/time-off/allocations/${id}/approve`);
+    return mapAllocation(unwrap(response));
+  },
+
+  async refuseAllocation(id, reason) {
+    const response = await api.post(`/time-off/allocations/${id}/refuse`, { reason });
+    return mapAllocation(unwrap(response));
+  },
+
+  // ── Leave Requests ───────────────────────────────────────────────────────────
+
   async getLeaveRequests(params = {}) {
-    await delay(500);
-    let results = [...mockRequests];
+    const query = new URLSearchParams();
+    if (params.page)        query.set('page', params.page);
+    if (params.limit)       query.set('limit', params.limit ?? 100);
+    if (params.employeeId)  query.set('employee_id', params.employeeId);
     if (params.status && params.status !== 'All') {
-      results = results.filter(r => r.status === params.status);
+      query.set('status', params.status.toUpperCase());
     }
-    if (params.employeeId) {
-      results = results.filter(r => r.employeeId === params.employeeId);
-    }
-    // Sort by submittedAt descending
-    results.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-    return results;
+    const response = await api.get(`/time-off/requests?${query.toString()}`);
+    const payload  = unwrap(response);
+    return (payload.requests ?? payload.data ?? []).map(mapRequest);
   },
 
   async getLeaveRequest(id) {
-    await delay(300);
-    const req = mockRequests.find(r => r.id === id);
-    if (!req) throw new Error("Request not found");
-    return req;
+    const response = await api.get(`/time-off/requests/${id}`);
+    return mapRequest(unwrap(response));
   },
 
   async createLeaveRequest(data) {
-    await delay(700);
-    
-    // In a real app, the backend would calculate duration and check balance.
-    // We will do a basic mock check here to prevent over-requesting if allocation is required.
-    const start = new Date(data.startDate);
-    const end = new Date(data.endDate);
-    const duration = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1); // Mock duration calculation
-    
-    const lt = mockLeaveTypes.find(t => t.id === data.leaveTypeId);
-    if (!lt) throw new Error("Leave type not found");
-
-    if (lt.requiresAllocation) {
-      const year = start.getFullYear();
-      const alloc = mockAllocations.find(a => a.employeeId === data.employeeId && a.leaveTypeId === data.leaveTypeId && a.year === year);
-      
-      if (!alloc) throw new Error("No allocation exists for this leave type and year.");
-      if (alloc.remaining < duration) throw new Error(`Insufficient balance. Available: ${alloc.remaining}, Requested: ${duration}`);
-      
-      // Update the mock allocation to reflect the pending request
-      alloc.pending += duration;
-      alloc.remaining -= duration;
-    }
-
-    const newReq = {
-      id: `REQ-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
-      employeeName: data.employeeName || 'Current User', // Mock name
-      department: data.department || 'General',
-      leaveTypeName: lt.name,
-      duration: duration,
-      status: 'Pending',
-      submittedAt: new Date().toISOString(),
-      managerComment: '',
-      ...data
+    const payload = {
+      employee_id:      data.employeeId,
+      time_off_type_id: data.leaveTypeId,
+      start_date:       data.startDate,
+      end_date:         data.endDate,
+      reason:           data.reason ?? '',
     };
-    
-    mockRequests.push(newReq);
-    return newReq;
+    const response = await api.post('/time-off/requests', payload);
+    return mapRequest(unwrap(response));
   },
 
   async approveLeaveRequest(id) {
-    await delay(600);
-    const index = mockRequests.findIndex(r => r.id === id);
-    if (index === -1) throw new Error("Request not found");
-    
-    const req = mockRequests[index];
-    if (req.status !== 'Pending') throw new Error("Can only approve pending requests.");
-    
-    req.status = 'Approved';
-    req.managerComment = 'Approved';
-    
-    // Update allocation if required
-    const lt = mockLeaveTypes.find(t => t.id === req.leaveTypeId);
-    if (lt && lt.requiresAllocation) {
-      const start = new Date(req.startDate);
-      const alloc = mockAllocations.find(a => a.employeeId === req.employeeId && a.leaveTypeId === req.leaveTypeId && a.year === start.getFullYear());
-      if (alloc) {
-        alloc.pending -= req.duration;
-        alloc.used += req.duration;
-      }
-    }
-    
-    return req;
+    const response = await api.post(`/time-off/requests/${id}/approve`);
+    return mapRequest(unwrap(response));
   },
 
   async rejectLeaveRequest(id, data) {
-    await delay(600);
-    const index = mockRequests.findIndex(r => r.id === id);
-    if (index === -1) throw new Error("Request not found");
-    
-    const req = mockRequests[index];
-    if (req.status !== 'Pending') throw new Error("Can only reject pending requests.");
-    
-    if (!data.reason) throw new Error("Rejection reason is required.");
-    
-    req.status = 'Rejected';
-    req.managerComment = data.reason;
-    
-    // Refund pending balance if required
-    const lt = mockLeaveTypes.find(t => t.id === req.leaveTypeId);
-    if (lt && lt.requiresAllocation) {
-      const start = new Date(req.startDate);
-      const alloc = mockAllocations.find(a => a.employeeId === req.employeeId && a.leaveTypeId === req.leaveTypeId && a.year === start.getFullYear());
-      if (alloc) {
-        alloc.pending -= req.duration;
-        alloc.remaining += req.duration; // refund the pending amount back to remaining
-      }
-    }
-    
-    return req;
+    const response = await api.post(`/time-off/requests/${id}/refuse`, {
+      reason: data?.reason ?? data ?? 'Refused',
+    });
+    return mapRequest(unwrap(response));
   },
 
-  // ── Global Stats (for Time Off HR Dashboard) ───────────────────────────
-  async getDashboardStats() {
-    await delay(400);
-    const pendingReqs = mockRequests.filter(r => r.status === 'Pending').length;
-    let totalAllocated = 0;
-    let totalUsed = 0;
-    let totalRemaining = 0;
+  async cancelLeaveRequest(id) {
+    const response = await api.post(`/time-off/requests/${id}/cancel`);
+    return mapRequest(unwrap(response));
+  },
 
-    mockAllocations.forEach(a => {
-      totalAllocated += a.allocated;
-      totalUsed += a.used;
-      totalRemaining += a.remaining;
-    });
+  // ── Dashboard Stats ─────────────────────────────────────────────────────────
+
+  async getDashboardStats() {
+    // Fetch pending requests count and overall allocation totals
+    const [reqRes, allocRes] = await Promise.all([
+      api.get('/time-off/requests?status=PENDING&limit=1').catch(() => ({ data: { data: { requests: [] } } })),
+      api.get('/time-off/allocations?status=APPROVED&limit=500').catch(() => ({ data: { data: { allocations: [] } } })),
+    ]);
+
+    const requests   = unwrap(reqRes);
+    const allocs     = unwrap(allocRes);
+    const allocList  = (allocs.allocations ?? allocs.data ?? []).map(mapAllocation);
+
+    const totalAllocated = allocList.reduce((s, a) => s + a.approved, 0);
+    const totalUsed      = allocList.reduce((s, a) => s + a.taken, 0);
+    const totalRemaining = allocList.reduce((s, a) => s + a.remaining, 0);
 
     return {
-      pendingRequests: pendingReqs,
+      pendingRequests: requests.pagination?.total ?? (requests.requests ?? []).length ?? 0,
       totalAllocated,
       totalUsed,
-      totalRemaining
+      totalRemaining,
     };
-  }
+  },
 };
