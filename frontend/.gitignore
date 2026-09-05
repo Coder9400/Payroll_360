@@ -7,11 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules/
-dist/
-dist-ssr/
-build/
-coverage/
+node_modules
+dist
+dist-ssr
 *.local
 
 # Editor directories and files
@@ -24,8 +22,3 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
-
-# Python
-__pycache__/
-*.pyc
-.env
