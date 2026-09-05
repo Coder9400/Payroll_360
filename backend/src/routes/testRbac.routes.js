@@ -50,11 +50,19 @@ router.get('/payroll-access', requireAuth(), requirePermission(PERMISSIONS.PAYRO
   });
 });
 
-// Payroll processing (HR Payroll User, HR Payroll Manager, Admin)
+// Payroll action (POST endpoint)
+router.post('/payroll-action', requireAuth(), requirePermission(PERMISSIONS.PAYROLL_PROCESS), (req, res) => {
+  return sendSuccess(res, {
+    data: { module: 'payroll', action: 'process', executed: true },
+    message: 'Payroll process executed',
+  });
+});
+
+// Payroll process (GET endpoint — used in test suite for HR Payroll User verification)
 router.get('/payroll-process', requireAuth(), requirePermission(PERMISSIONS.PAYROLL_PROCESS), (req, res) => {
   return sendSuccess(res, {
     data: { module: 'payroll', action: 'process', access: 'granted' },
-    message: 'Payroll calculation run permitted',
+    message: 'Payroll processing access verified',
   });
 });
 
