@@ -7,14 +7,15 @@ const validate = (schema) => {
       req.body = parsedBody; // Replace with validated/transformed data
       next();
     } catch (error) {
-      if (error.errors) {
-        // Zod error
+      // Zod v3 uses error.errors; Zod v4 uses error.issues
+      const issues = error.issues || error.errors;
+      if (issues) {
         return res.status(400).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Invalid request data',
-            details: error.errors.map(e => ({ path: e.path.join('.'), message: e.message }))
+            details: issues.map(e => ({ path: e.path.join('.'), message: e.message }))
           }
         });
       }
