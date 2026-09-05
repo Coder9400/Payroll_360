@@ -1,308 +1,202 @@
-// Mock Data Layer for Attendance Module
-// Simulates API interactions for Phase 04
+/**
+ * Attendance Service
+ * ──────────────────
+ * Real API calls to the PeoplePay360 backend.
+ * All data persists in Supabase PostgreSQL.
+ */
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import api from './api';
 
-const getTodayDateString = () => {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
-};
+function unwrap(response) {
+  return response.data?.data ?? response.data;
+}
 
-// Mock Attendance Records
-let attendanceData = [
-  {
-    id: "ATT-001",
-    employeeId: "EMP-001",
-    employeeName: "Rahul Sharma",
-    department: "Engineering",
-    date: getTodayDateString(),
-    checkIn: `${getTodayDateString()}T09:15:00Z`,
-    checkOut: `${getTodayDateString()}T18:00:00Z`,
-    scheduledHours: 8,
-    workedHours: 8.75,
-    overtime: 0.75,
-    status: "Present",
-  },
-  {
-    id: "ATT-002",
-    employeeId: "EMP-002",
-    employeeName: "Priya Patel",
-    department: "Marketing",
-    date: getTodayDateString(),
-    checkIn: `${getTodayDateString()}T09:45:00Z`,
-    checkOut: null,
-    scheduledHours: 8,
-    workedHours: null,
-    overtime: null,
-    status: "Late",
-  },
-  {
-    id: "ATT-003",
-    employeeId: "EMP-003",
-    employeeName: "Amit Singh",
-    department: "Sales",
-    date: getTodayDateString(),
-    checkIn: null,
-    checkOut: null,
-    scheduledHours: 8,
-    workedHours: null,
-    overtime: null,
-    status: "Leave",
-  },
-  {
-    id: "ATT-004",
-    employeeId: "EMP-001",
-    employeeName: "Rahul Sharma",
-    department: "Engineering",
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
-    checkIn: `${new Date(Date.now() - 86400000).toISOString().split('T')[0]}T09:00:00Z`,
-    checkOut: null,
-    scheduledHours: 8,
-    workedHours: null,
-    overtime: null,
-    status: "Missing Checkout",
-  },
-];
+// Map backend attendance record → frontend format
+function mapRecord(r) {
+  if (!r) return null;
+  const empName = r.employee
+    ? `${r.employee.first_name} ${r.employee.last_name}`
+    : (r.employee_name ?? '');
+  return {
+    id:             r.id,
+    employeeId:     r.employee_id,
+    employeeName:   empName,
+    department:     r.employee?.department?.name ?? '',
+    date:           r.attendance_date,
+    checkIn:        r.check_in,
+    checkOut:       r.check_out,
+    workedHours:    r.worked_hours ?? null,
+    scheduledHours: r.expected_hours ?? 8,
+    overtime:       r.overtime_hours ?? null,
+    status:         mapStatus(r.status),
+    isManualEdit:   r.is_manual_edit,
+    correctionReason: r.correction_reason,
+    notes:          r.notes,
+  };
+}
 
-// Mock Regularization Requests
-let regularizationRequests = [
-  {
-    id: "REG-001",
-    attendanceId: "ATT-004",
-    employeeId: "EMP-001",
-    employeeName: "Rahul Sharma",
-    date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    originalCheckIn: `${new Date(Date.now() - 86400000).toISOString().split('T')[0]}T09:00:00Z`,
-    originalCheckOut: null,
-    requestedCheckIn: `${new Date(Date.now() - 86400000).toISOString().split('T')[0]}T09:00:00Z`,
-    requestedCheckOut: `${new Date(Date.now() - 86400000).toISOString().split('T')[0]}T18:00:00Z`,
-    reason: "Forgot to check out while leaving in a rush.",
-    status: "Pending",
-    submittedAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-    managerComment: null
-  }
-];
+// Backend status → frontend display
+function mapStatus(s) {
+  const map = {
+    PRESENT:         'Present',
+    LATE:            'Late',
+    HALF_DAY:        'Half Day',
+    OVERTIME:        'Overtime',
+    MISSING_CHECKOUT:'Missing Checkout',
+    CORRECTED:       'Corrected',
+  };
+  return map[s] ?? s;
+}
 
 export const attendanceService = {
   /**
-   * Fetch all attendance records (HR view)
+   * Get all attendance records (HR view)
    */
-  getAttendance: async (params = {}) => {
-    await delay(600); // simulate network latency
-    let results = [...attendanceData];
-
-    if (params.search) {
-      const q = params.search.toLowerCase();
-      results = results.filter(
-        (a) =>
-          a.employeeName.toLowerCase().includes(q) ||
-          a.employeeId.toLowerCase().includes(q)
-      );
-    }
-    if (params.department && params.department !== 'All Departments') {
-      results = results.filter((a) => a.department === params.department);
-    }
+  async getAttendance(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page)        query.set('page', params.page ?? 1);
+    if (params.limit)       query.set('limit', params.limit ?? 50);
+    if (params.search)      query.set('search', params.search);
+    if (params.date_from)   query.set('date_from', params.date_from);
+    if (params.date_to)     query.set('date_to', params.date_to);
     if (params.status && params.status !== 'All Statuses') {
-      results = results.filter((a) => a.status === params.status);
+      // Convert display status back to backend status
+      const reverseMap = {
+        'Present': 'PRESENT', 'Late': 'LATE', 'Half Day': 'HALF_DAY',
+        'Overtime': 'OVERTIME', 'Missing Checkout': 'MISSING_CHECKOUT', 'Corrected': 'CORRECTED',
+      };
+      query.set('status', reverseMap[params.status] ?? params.status);
     }
-    
-    // Sort
-    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (params.employee_id) query.set('employee_id', params.employee_id);
 
-    // Summary metrics (mock)
-    const today = getTodayDateString();
-    const todayRecords = results.filter(r => r.date === today);
-    const presentToday = todayRecords.filter(r => r.status === 'Present' || r.status === 'Late').length;
-    const absentToday = todayRecords.filter(r => r.status === 'Absent').length;
-    const lateToday = todayRecords.filter(r => r.status === 'Late').length;
-    const missingCheckout = results.filter(r => r.status === 'Missing Checkout').length;
+    const response = await api.get(`/attendance?${query.toString()}`);
+    const payload  = unwrap(response);
+    const records  = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+
+    // Build summary metrics from returned data
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecords = records.filter(r => r.date === today);
 
     return {
-      data: results,
+      data: records,
+      meta: payload.pagination ?? {},
       metrics: {
-        presentToday,
-        absentToday,
-        lateToday,
-        missingCheckout
-      }
+        presentToday:    todayRecords.filter(r => ['Present','Late','Overtime'].includes(r.status)).length,
+        absentToday:     0, // Absence is derived — not stored as records
+        lateToday:       todayRecords.filter(r => r.status === 'Late').length,
+        missingCheckout: records.filter(r => r.status === 'Missing Checkout').length,
+      },
     };
   },
 
   /**
-   * Fetch attendance records for a specific employee
+   * Get attendance records for a specific employee
    */
-  getEmployeeAttendance: async (employeeId, params = {}) => {
-    await delay(500);
-    const results = attendanceData.filter(a => a.employeeId === employeeId);
-    
-    // Calculate employee-specific mock metrics
-    const presentDays = results.filter(r => r.status === 'Present' || r.status === 'Late').length;
-    const absentDays = results.filter(r => r.status === 'Absent').length;
-    const leaveDays = results.filter(r => r.status === 'Leave').length;
-    const totalWorkedHours = results.reduce((acc, curr) => acc + (curr.workedHours || 0), 0);
-    
+  async getEmployeeAttendance(employeeId, params = {}) {
+    const query = new URLSearchParams();
+    if (params.page)      query.set('page', params.page ?? 1);
+    if (params.limit)     query.set('limit', params.limit ?? 50);
+    if (params.date_from) query.set('date_from', params.date_from);
+    if (params.date_to)   query.set('date_to', params.date_to);
+
+    const response = await api.get(`/employees/${employeeId}/attendance?${query.toString()}`);
+    const payload  = unwrap(response);
+    const records  = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+
+    const presentDays    = records.filter(r => ['Present','Late','Overtime'].includes(r.status)).length;
+    const leaveDays      = 0; // Not stored in attendance table
+    const totalWorkedHours = records.reduce((acc, r) => acc + (r.workedHours ?? 0), 0);
+
     return {
-      data: results.sort((a, b) => new Date(b.date) - new Date(a.date)),
-      metrics: {
-        presentDays,
-        absentDays,
-        leaveDays,
-        totalWorkedHours
-      }
+      data: records,
+      meta: payload.pagination ?? {},
+      metrics: { presentDays, absentDays: 0, leaveDays, totalWorkedHours },
     };
   },
 
   /**
-   * Fetch a single attendance record
+   * Get today's attendance for the current employee (self-service)
    */
-  getAttendanceRecord: async (id) => {
-    await delay(300);
-    const record = attendanceData.find(a => a.id === id);
-    if (!record) throw new Error("Attendance record not found");
-    return record;
+  async getMyTodayAttendance(employeeId) {
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const response = await api.get(
+        `/employees/${employeeId}/attendance?date_from=${today}&date_to=${today}&limit=1`
+      );
+      const payload = unwrap(response);
+      const records = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+      return records[0] ?? null;
+    } catch {
+      return null;
+    }
   },
 
   /**
    * Check In
    */
-  checkIn: async (employeeId) => {
-    await delay(800);
-    const today = getTodayDateString();
-    const existing = attendanceData.find(a => a.employeeId === employeeId && a.date === today);
-    if (existing && existing.checkIn) {
-      throw new Error("Already checked in today.");
-    }
-    
-    const newRecord = {
-      id: `ATT-${Date.now()}`,
-      employeeId,
-      employeeName: "Current User", // Mock name
-      department: "Engineering", // Mock department
-      date: today,
-      checkIn: new Date().toISOString(),
-      checkOut: null,
-      scheduledHours: 8,
-      workedHours: null,
-      overtime: null,
-      status: "Present", // Automatically determined by backend in reality
-    };
-    
-    if (existing) {
-      Object.assign(existing, newRecord);
-      return existing;
-    } else {
-      attendanceData.unshift(newRecord);
-      return newRecord;
-    }
+  async checkIn(employeeId, notes) {
+    const payload = {};
+    if (notes) payload.notes = notes;
+    const response = await api.post('/attendance/check-in', payload);
+    return mapRecord(unwrap(response));
   },
 
   /**
    * Check Out
    */
-  checkOut: async (employeeId) => {
-    await delay(800);
-    const today = getTodayDateString();
-    const record = attendanceData.find(a => a.employeeId === employeeId && a.date === today);
-    if (!record || !record.checkIn) {
-      throw new Error("Cannot check out without checking in.");
-    }
-    if (record.checkOut) {
-      throw new Error("Already checked out today.");
-    }
-
-    record.checkOut = new Date().toISOString();
-    
-    // Mock calculations (backend would do this)
-    const checkInTime = new Date(record.checkIn).getTime();
-    const checkOutTime = new Date(record.checkOut).getTime();
-    const diffHours = (checkOutTime - checkInTime) / (1000 * 60 * 60);
-    
-    record.workedHours = parseFloat(diffHours.toFixed(2));
-    if (record.workedHours > record.scheduledHours) {
-      record.overtime = parseFloat((record.workedHours - record.scheduledHours).toFixed(2));
-    } else {
-      record.overtime = 0;
-    }
-
-    return record;
+  async checkOut(employeeId, notes) {
+    const payload = {};
+    if (notes) payload.notes = notes;
+    const response = await api.post('/attendance/check-out', payload);
+    return mapRecord(unwrap(response));
   },
 
   /**
-   * Fetch regularization requests
+   * Correct an attendance record (HR only)
    */
-  getRegularizationRequests: async (params = {}) => {
-    await delay(500);
-    let results = [...regularizationRequests];
-    if (params.status) {
-      results = results.filter(r => r.status === params.status);
-    }
-    return results.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-  },
-
-  /**
-   * Create a regularization request
-   */
-  createRegularization: async (data) => {
-    await delay(700);
-    const newRequest = {
-      id: `REG-${Date.now()}`,
-      attendanceId: data.attendanceId,
-      employeeId: data.employeeId,
-      employeeName: data.employeeName || "Current User",
-      date: data.date,
-      originalCheckIn: data.originalCheckIn,
-      originalCheckOut: data.originalCheckOut,
-      requestedCheckIn: data.requestedCheckIn,
-      requestedCheckOut: data.requestedCheckOut,
-      reason: data.reason,
-      status: "Pending",
-      submittedAt: new Date().toISOString(),
-      managerComment: null
+  async correctAttendance(id, data) {
+    const payload = {
+      check_in:          data.checkIn ?? data.check_in,
+      check_out:         data.checkOut ?? data.check_out,
+      correction_reason: data.reason ?? data.correction_reason,
+      notes:             data.notes,
     };
-    regularizationRequests.unshift(newRequest);
-    return newRequest;
+    const response = await api.put(`/attendance/${id}`, payload);
+    return mapRecord(unwrap(response));
   },
 
   /**
-   * Approve a regularization request
+   * Get regularization requests (maps to attendance corrections)
    */
-  approveRegularization: async (id) => {
-    await delay(600);
-    const req = regularizationRequests.find(r => r.id === id);
-    if (!req) throw new Error("Request not found");
-    
-    req.status = "Approved";
-
-    // Update corresponding attendance record (simulating backend behavior)
-    const attendance = attendanceData.find(a => a.id === req.attendanceId);
-    if (attendance) {
-      attendance.checkIn = req.requestedCheckIn;
-      attendance.checkOut = req.requestedCheckOut;
-      attendance.status = "Present";
-      
-      if (attendance.checkIn && attendance.checkOut) {
-        const inTime = new Date(attendance.checkIn).getTime();
-        const outTime = new Date(attendance.checkOut).getTime();
-        const diff = (outTime - inTime) / (1000 * 60 * 60);
-        attendance.workedHours = parseFloat(diff.toFixed(2));
-        attendance.overtime = attendance.workedHours > attendance.scheduledHours 
-          ? parseFloat((attendance.workedHours - attendance.scheduledHours).toFixed(2)) 
-          : 0;
-      }
-    }
-    return req;
+  async getRegularizationRequests(params = {}) {
+    // Regularization is managed as attendance corrections in our backend
+    // For now, return attendance records with MISSING_CHECKOUT as pending regularizations
+    const response = await this.getAttendance({ ...params, limit: 100 });
+    return response.data.filter(r => r.status === 'Missing Checkout');
   },
 
   /**
-   * Reject a regularization request
+   * Create regularization request (submit corrected times)
    */
-  rejectRegularization: async (id, reason) => {
-    await delay(600);
-    const req = regularizationRequests.find(r => r.id === id);
-    if (!req) throw new Error("Request not found");
-    
-    req.status = "Rejected";
-    req.managerComment = reason;
-    return req;
-  }
+  async createRegularization(data) {
+    return this.correctAttendance(data.attendanceId, {
+      checkIn:  data.requestedCheckIn,
+      checkOut: data.requestedCheckOut,
+      reason:   data.reason,
+    });
+  },
+
+  /**
+   * Approve regularization (already corrected via correctAttendance)
+   */
+  async approveRegularization(id) {
+    return this.correctAttendance(id, { correction_reason: 'Approved by manager' });
+  },
+
+  /**
+   * Reject regularization
+   */
+  async rejectRegularization(id, reason) {
+    return this.correctAttendance(id, { correction_reason: `Rejected: ${reason}` });
+  },
 };
