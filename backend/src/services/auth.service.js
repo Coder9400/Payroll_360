@@ -20,7 +20,14 @@ class AuthService {
     if (token.startsWith('test-token-')) {
       const role = token.replace('test-token-', '');
       const validRole = Object.values(ROLES).includes(role) ? role : ROLES.EMPLOYEE;
-      const testId = `test-user-${validRole}-0000-0000-000000000000`;
+      const testRoleIds = {
+        [ROLES.ADMIN]: 'a0000000-0000-4000-8000-000000000001',
+        [ROLES.HR_PAYROLL_MANAGER]: 'a0000000-0000-4000-8000-000000000002',
+        [ROLES.HR_PAYROLL_USER]: 'a0000000-0000-4000-8000-000000000003',
+        [ROLES.HR_MANAGER]: 'a0000000-0000-4000-8000-000000000004',
+        [ROLES.EMPLOYEE]: 'a0000000-0000-4000-8000-000000000005',
+      };
+      const testId = testRoleIds[validRole] || 'a0000000-0000-4000-8000-000000000005';
       
       authUser = {
         id: testId,

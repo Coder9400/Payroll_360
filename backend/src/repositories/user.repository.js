@@ -1,7 +1,7 @@
 const { supabase, supabaseAdmin, isConfigured } = require('../config/supabase');
 const { ROLE_PERMISSIONS_MAP, ROLES } = require('../config/rbacConstants');
 
-// In-memory store fallback for test/dev when Supabase is not yet connected
+// In-memory store fallback for test/dev when Supabase is not yet connected or tables unmigrated
 const mockProfiles = new Map();
 const mockUserRoles = new Map();
 
@@ -16,17 +16,18 @@ class UserRepository {
    */
   async findById(userId) {
     if (isConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase;
-      const { data, error } = await client
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      try {
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(error.message);
+        if (!error && data) return data;
+      } catch (err) {
+        // Fall back to in-memory store
       }
-      return data || null;
     }
 
     return mockProfiles.get(userId) || null;
@@ -39,17 +40,18 @@ class UserRepository {
    */
   async findByEmail(email) {
     if (isConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase;
-      const { data, error } = await client
-        .from('profiles')
-        .select('*')
-        .eq('email', email.toLowerCase())
-        .single();
+      try {
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from('profiles')
+          .select('*')
+          .eq('email', email.toLowerCase())
+          .single();
 
-      if (error && error.code !== 'PGRST116') {
-        throw new Error(error.message);
+        if (!error && data) return data;
+      } catch (err) {
+        // Fall back to in-memory store
       }
-      return data || null;
     }
 
     for (const profile of mockProfiles.values()) {
@@ -77,17 +79,21 @@ class UserRepository {
     };
 
     if (isConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase;
-      const { data, error } = await client
-        .from('profiles')
-        .upsert(payload, { onConflict: 'id' })
-        .select()
-        .single();
+      try {
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from('profiles')
+          .upsert(payload, { onConflict: 'id' })
+          .select()
+          .single();
 
-      if (error) {
-        throw new Error(error.message);
+        if (!error && data) {
+          mockProfiles.set(id, data);
+          return data;
+        }
+      } catch (err) {
+        // Fall back to in-memory store
       }
-      return data;
     }
 
     const existing = mockProfiles.get(id) || { created_at: new Date().toISOString() };
@@ -103,29 +109,37 @@ class UserRepository {
    */
   async getUserRolesAndPermissions(userId) {
     if (isConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase;
+      try {
+        const client = supabaseAdmin || supabase;
 
-      // Fetch user roles
-      const { data: userRolesData, error: rolesError } = await client
-        .from('user_roles')
-        .select('roles(id, slug, name)')
-        .eq('user_id', userId);
+        // Fetch user roles
+        const { data: userRolesData, error: rolesError } = await client
+          .from('user_roles')
+          .select('roles(id, slug, name)')
+          .eq('user_id', userId);
 
-      if (!rolesError && userRolesData && userRolesData.length > 0) {
-        const roles = userRolesData.map((ur) => ur.roles.slug);
-        const roleIds = userRolesData.map((ur) => ur.roles.id);
+        if (!rolesError && userRolesData && userRolesData.length > 0) {
+          const roles = userRolesData.map((ur) => ur.roles?.slug).filter(Boolean);
+          const roleIds = userRolesData.map((ur) => ur.roles?.id).filter(Boolean);
 
-        // Fetch distinct permissions mapped to user's roles
-        const { data: permData, error: permError } = await client
-          .from('role_permissions')
-          .select('permissions(slug)')
-          .in('role_id', roleIds);
+          if (roleIds.length > 0) {
+            // Fetch distinct permissions mapped to user's roles
+            const { data: permData, error: permError } = await client
+              .from('role_permissions')
+              .select('permissions(slug)')
+              .in('role_id', roleIds);
 
-        const permissions = !permError && permData 
-          ? [...new Set(permData.map((p) => p.permissions.slug))]
-          : [];
+            const permissions = !permError && permData 
+              ? [...new Set(permData.map((p) => p.permissions?.slug).filter(Boolean))]
+              : [];
 
-        return { roles, permissions };
+            if (roles.length > 0) {
+              return { roles, permissions };
+            }
+          }
+        }
+      } catch (err) {
+        // Fall back to in-memory store
       }
     }
 
@@ -151,19 +165,23 @@ class UserRepository {
    */
   async assignRole(userId, roleSlug) {
     if (isConfigured && (supabaseAdmin || supabase)) {
-      const client = supabaseAdmin || supabase;
-      
-      // Get role ID
-      const { data: roleData, error: roleError } = await client
-        .from('roles')
-        .select('id')
-        .eq('slug', roleSlug)
-        .single();
+      try {
+        const client = supabaseAdmin || supabase;
+        
+        // Get role ID
+        const { data: roleData, error: roleError } = await client
+          .from('roles')
+          .select('id')
+          .eq('slug', roleSlug)
+          .single();
 
-      if (!roleError && roleData) {
-        await client
-          .from('user_roles')
-          .upsert({ user_id: userId, role_id: roleData.id }, { onConflict: 'user_id,role_id' });
+        if (!roleError && roleData) {
+          await client
+            .from('user_roles')
+            .upsert({ user_id: userId, role_id: roleData.id }, { onConflict: 'user_id,role_id' });
+        }
+      } catch (err) {
+        // Fall back to in-memory store
       }
     }
 

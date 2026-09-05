@@ -1,8 +1,9 @@
 const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file
+// Load environment variables from backend/.env or root .env
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const config = {
   env: process.env.NODE_ENV || 'development',
@@ -14,8 +15,8 @@ const config = {
   },
   supabase: {
     url: process.env.SUPABASE_URL || '',
-    anonKey: process.env.SUPABASE_PUBLISHABLE_KEY || '',
-    serviceRoleKey: process.env.SUPABASE_SECRET_KEY || '',
+    anonKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || '',
+    serviceRoleKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   },
   mistral: {
     apiKey: process.env.MISTRAL_API_KEY || '',
