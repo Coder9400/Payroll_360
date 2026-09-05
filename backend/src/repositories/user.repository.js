@@ -115,7 +115,7 @@ class UserRepository {
    * @param {object} profileData
    * @returns {Promise<object>}
    */
-  async upsertProfile({ id, email, first_name = '', last_name = '', avatar_url = null, is_active = true }) {
+  async upsertProfile({ id, email, first_name = '', last_name = '', avatar_url = null, is_active = true, tenant_id }) {
     const payload = {
       id,
       email: (email || '').toLowerCase().trim(),
@@ -125,6 +125,7 @@ class UserRepository {
       is_active: is_active !== false,
       updated_at: new Date().toISOString(),
     };
+    if (tenant_id) payload.tenant_id = tenant_id;
 
     if (isMockUserId(id) || (!isConfigured && !config.isProduction)) {
       const existing = mockProfiles.get(id) || { created_at: new Date().toISOString() };
@@ -291,9 +292,10 @@ class UserRepository {
    * Assign or replace role for user
    * @param {string} userId
    * @param {string} roleSlug
+   * @param {string} tenantId - which tenant this role assignment applies to
    * @param {boolean} [replace=false]
    */
-  async assignRole(userId, roleSlug, replace = false) {
+  async assignRole(userId, roleSlug, tenantId, replace = false) {
     const normalizedRole = (roleSlug || '').trim().toLowerCase();
     if (!Object.values(ROLES).includes(normalizedRole)) {
       throw new AppError(`Invalid role slug: ${roleSlug}`, 400, 'BAD_REQUEST');
@@ -313,7 +315,7 @@ class UserRepository {
 
     if (isConfigured && (supabaseAdmin || supabase)) {
       const client = supabaseAdmin || supabase;
-      
+
       const { data: roleData, error: roleError } = await client
         .from('roles')
         .select('id')
@@ -330,7 +332,10 @@ class UserRepository {
         }
         const { error: assignError } = await client
           .from('user_roles')
-          .upsert({ user_id: userId, role_id: roleData.id }, { onConflict: 'user_id,role_id' });
+          .upsert(
+            { user_id: userId, role_id: roleData.id, tenant_id: tenantId },
+            { onConflict: 'user_id,role_id' }
+          );
 
         if (assignError && (config.isProduction || process.env.NODE_ENV === 'production')) {
           throw new AppError(`Failed to assign role to user in database: ${assignError.message}`, 500, 'DATABASE_ERROR');

@@ -10,17 +10,22 @@
  *   - Payrun status machine
  *   - Payslip immutability after PAID
  *   - Attendance + approved time off consumed into payroll context
+ *
+ * Multi-tenancy: every exported function takes tenantId as its first
+ * argument. computePayrun additionally intersects any client-supplied
+ * employee_ids against the tenant-scoped employee set — a caller can never
+ * pull another tenant's employees/wages into their own payrun, even by ID.
  */
 
 'use strict';
 
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 const {
   PAYRUN_STATUS,
   PAYSLIP_STATUS,
   VALID_PAYRUN_TRANSITIONS,
-  DEDUCTION_CATEGORIES,
   VALIDATION_SEVERITY,
   PAYROLL_ERRORS,
 } = require('../config/payrollConstants');
@@ -33,30 +38,15 @@ const {
 
 const db = supabaseAdmin || supabase;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function assertValidTransition(currentStatus, targetStatus) {
-  const allowed = VALID_PAYRUN_TRANSITIONS[currentStatus] || [];
-  if (!allowed.includes(targetStatus)) {
-    throw new AppError(
-      `Invalid status transition: ${currentStatus} → ${targetStatus}`,
-      409,
-      PAYROLL_ERRORS.PAYRUN_INVALID_TRANSITION
-    );
-  }
-}
-
 // ─── Payrun CRUD ──────────────────────────────────────────────────────────────
 
-exports.listPayruns = async ({ page = 1, limit = 20, status } = {}) => {
+exports.listPayruns = async (tenantId, { page = 1, limit = 20, status } = {}) => {
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('payruns')
-    .select(
-      `*, salary_structures(name, code), payslips(id)`,
-      { count: 'exact' }
-    );
+  let query = withTenant(
+    db.from('payruns').select(`*, salary_structures(name, code), payslips(id)`, { count: 'exact' }),
+    tenantId
+  );
 
   if (status) query = query.eq('status', status);
 
@@ -75,10 +65,9 @@ exports.listPayruns = async ({ page = 1, limit = 20, status } = {}) => {
   return { payruns, total: count, page, limit };
 };
 
-exports.getPayrunById = async (id) => {
-  const { data, error } = await db
-    .from('payruns')
-    .select(`
+exports.getPayrunById = async (tenantId, id) => {
+  const { data, error } = await withTenant(
+    db.from('payruns').select(`
       *,
       salary_structures(name, code),
       payslips(
@@ -86,9 +75,9 @@ exports.getPayrunById = async (id) => {
         deduction_amount, net_amount, contract_wage, warnings,
         employees(id, first_name, last_name, employee_code)
       )
-    `)
-    .eq('id', id)
-    .single();
+    `).eq('id', id),
+    tenantId
+  ).single();
 
   if (error) {
     if (error.code === 'PGRST116') throw new AppError('Payrun not found', 404, PAYROLL_ERRORS.PAYRUN_NOT_FOUND);
@@ -98,15 +87,14 @@ exports.getPayrunById = async (id) => {
   return data;
 };
 
-exports.createPayrun = async (body, createdByUserId) => {
+exports.createPayrun = async (tenantId, body, createdByUserId) => {
   const { name, salary_structure_id, period_start, period_end } = body;
 
-  // Verify salary structure exists and is active
-  const { data: structure, error: sErr } = await db
-    .from('salary_structures')
-    .select('id, name, is_active')
-    .eq('id', salary_structure_id)
-    .single();
+  // Verify salary structure exists, is active, and belongs to this tenant
+  const { data: structure, error: sErr } = await withTenant(
+    db.from('salary_structures').select('id, name, is_active').eq('id', salary_structure_id),
+    tenantId
+  ).single();
 
   if (sErr || !structure) {
     throw new AppError('Salary structure not found', 404, PAYROLL_ERRORS.STRUCTURE_NOT_FOUND);
@@ -117,16 +105,18 @@ exports.createPayrun = async (body, createdByUserId) => {
 
   const payrunName = name || `${structure.name} – ${period_start} to ${period_end}`;
 
+  const payload = withTenantId({
+    name: payrunName,
+    salary_structure_id,
+    period_start,
+    period_end,
+    status: PAYRUN_STATUS.DRAFT,
+    created_by: createdByUserId,
+  }, tenantId);
+
   const { data, error } = await db
     .from('payruns')
-    .insert([{
-      name: payrunName,
-      salary_structure_id,
-      period_start,
-      period_end,
-      status: PAYRUN_STATUS.DRAFT,
-      created_by: createdByUserId,
-    }])
+    .insert([payload])
     .select()
     .single();
 
@@ -139,31 +129,34 @@ exports.createPayrun = async (body, createdByUserId) => {
  * Return employees who have exactly one active contract covering the payroll period.
  * Flags employees with no contract or overlapping contracts.
  */
-exports.getEligibleEmployees = async (payrunId) => {
+exports.getEligibleEmployees = async (tenantId, payrunId) => {
   // Load payrun
-  const { data: payrun, error: prErr } = await db
-    .from('payruns')
-    .select('salary_structure_id, period_start, period_end')
-    .eq('id', payrunId)
-    .single();
+  const { data: payrun, error: prErr } = await withTenant(
+    db.from('payruns').select('salary_structure_id, period_start, period_end').eq('id', payrunId),
+    tenantId
+  ).single();
 
   if (prErr) throw new AppError('Payrun not found', 404, PAYROLL_ERRORS.PAYRUN_NOT_FOUND);
 
   const { period_start, period_end } = payrun;
 
-  // All active employees
-  const { data: employees, error: empErr } = await db
-    .from('employees')
-    .select(`
+  // All active employees in this tenant
+  const { data: employees, error: empErr } = await withTenant(
+    db.from('employees').select(`
       id, first_name, last_name, employee_code, employment_status,
       departments!employees_department_id_fkey(name),
       job_positions(name)
-    `)
-    .eq('employment_status', 'ACTIVE');
+    `).eq('employment_status', 'ACTIVE'),
+    tenantId
+  );
 
   if (empErr) throw new AppError(empErr.message, 500);
 
-  // Load all potentially relevant contracts in one query
+  // Load all potentially relevant contracts in one query. Not tenant-filtered
+  // directly (contracts has no dedicated read path here) — safe because the
+  // result is only ever consulted for employee ids already tenant-scoped
+  // above; any other tenant's contract rows fetched here are never joined to
+  // anything and never reach the response.
   const { data: contracts, error: cErr } = await db
     .from('contracts')
     .select('id, employee_id, start_date, end_date, wage, status, salary_structure_id')
@@ -218,16 +211,17 @@ exports.getEligibleEmployees = async (payrunId) => {
  *   6. UPSERT payslip + lines (idempotent)
  *   7. Update payrun totals
  *
+ * @param {string}   tenantId
  * @param {string}   payrunId
- * @param {string[]} selectedEmployeeIds - IDs of employees to include
+ * @param {string[]} selectedEmployeeIds - IDs of employees to include (will be
+ *   intersected against this tenant's employees — any foreign id is dropped).
  */
-exports.computePayrun = async (payrunId, selectedEmployeeIds) => {
+exports.computePayrun = async (tenantId, payrunId, selectedEmployeeIds) => {
   // 1. Load payrun
-  const { data: payrun, error: prErr } = await db
-    .from('payruns')
-    .select('*, salary_structures(*)')
-    .eq('id', payrunId)
-    .single();
+  const { data: payrun, error: prErr } = await withTenant(
+    db.from('payruns').select('*, salary_structures(*)').eq('id', payrunId),
+    tenantId
+  ).single();
 
   if (prErr) throw new AppError('Payrun not found', 404, PAYROLL_ERRORS.PAYRUN_NOT_FOUND);
 
@@ -238,6 +232,21 @@ exports.computePayrun = async (payrunId, selectedEmployeeIds) => {
 
   if (!selectedEmployeeIds || selectedEmployeeIds.length === 0) {
     throw new AppError('No employees selected for computation', 400, PAYROLL_ERRORS.PAYRUN_NO_EMPLOYEES);
+  }
+
+  // Security: never trust client-supplied employee ids verbatim — intersect
+  // against this tenant's actual employees so a foreign id can't be smuggled
+  // into a payrun (which would otherwise expose that employee's wage/contract
+  // data across tenants).
+  const { data: tenantEmployees, error: teErr } = await withTenant(
+    db.from('employees').select('id'),
+    tenantId
+  ).in('id', selectedEmployeeIds);
+  if (teErr) throw new AppError(teErr.message, 500);
+  const validEmployeeIds = (tenantEmployees || []).map(e => e.id);
+
+  if (validEmployeeIds.length === 0) {
+    throw new AppError('No valid employees selected for computation', 400, PAYROLL_ERRORS.PAYRUN_NO_EMPLOYEES);
   }
 
   // 2. Load salary rules for this structure (ordered by sequence)
@@ -275,7 +284,7 @@ exports.computePayrun = async (payrunId, selectedEmployeeIds) => {
   };
 
   // 3. Process each selected employee
-  for (const employeeId of selectedEmployeeIds) {
+  for (const employeeId of validEmployeeIds) {
     await _processEmployeePayslip({
       employeeId,
       payrun,
@@ -299,7 +308,7 @@ exports.computePayrun = async (payrunId, selectedEmployeeIds) => {
     updated_at:       new Date().toISOString(),
   }).eq('id', payrunId);
 
-  return exports.getPayrunById(payrunId);
+  return exports.getPayrunById(tenantId, payrunId);
 };
 
 /** Internal: process one employee's payslip within a payrun */
@@ -310,6 +319,9 @@ async function _processEmployeePayslip({
   const payslipWarnings = [];
 
   // ── Contract selection ──────────────────────────────────────────────────
+  // Not tenant-filtered directly — safe because employeeId is already
+  // guaranteed tenant-scoped (validEmployeeIds, computed above) before this
+  // function is ever called.
   const { data: contracts, error: cErr } = await db
     .from('contracts')
     .select('id, wage, start_date, end_date, status')
@@ -397,6 +409,7 @@ async function _processEmployeePayslip({
 
   // ── UPSERT payslip (idempotent — safe to recompute) ─────────────────────
   const payslipPayload = {
+    tenant_id:           payrun.tenant_id,
     payrun_id:           payrun.id,
     employee_id:         employeeId,
     contract_id:         contract.id,
@@ -475,12 +488,11 @@ async function _processEmployeePayslip({
 }
 
 // ─── Validate Payrun ──────────────────────────────────────────────────────────
-exports.validatePayrun = async (payrunId) => {
-  const { data: payrun, error: prErr } = await db
-    .from('payruns')
-    .select(`*, payslips(id, status, employee_id, warnings, net_amount, contract_id)`)
-    .eq('id', payrunId)
-    .single();
+exports.validatePayrun = async (tenantId, payrunId) => {
+  const { data: payrun, error: prErr } = await withTenant(
+    db.from('payruns').select(`*, payslips(id, status, employee_id, warnings, net_amount, contract_id)`).eq('id', payrunId),
+    tenantId
+  ).single();
 
   if (prErr) throw new AppError('Payrun not found', 404, PAYROLL_ERRORS.PAYRUN_NOT_FOUND);
 
@@ -544,12 +556,11 @@ exports.validatePayrun = async (payrunId) => {
 };
 
 // ─── Mark as Paid ─────────────────────────────────────────────────────────────
-exports.markAsPaid = async (payrunId) => {
-  const { data: payrun, error: prErr } = await db
-    .from('payruns')
-    .select('id, status, payslips(id)')
-    .eq('id', payrunId)
-    .single();
+exports.markAsPaid = async (tenantId, payrunId) => {
+  const { data: payrun, error: prErr } = await withTenant(
+    db.from('payruns').select('id, status, payslips(id)').eq('id', payrunId),
+    tenantId
+  ).single();
 
   if (prErr) throw new AppError('Payrun not found', 404, PAYROLL_ERRORS.PAYRUN_NOT_FOUND);
 
@@ -582,20 +593,21 @@ exports.markAsPaid = async (payrunId) => {
     updated_at: now,
   }).eq('id', payrunId);
 
-  return exports.getPayrunById(payrunId);
+  return exports.getPayrunById(tenantId, payrunId);
 };
 
 // ─── Payslips ─────────────────────────────────────────────────────────────────
 
-exports.listPayslips = async ({ page = 1, limit = 20, payrun_id, employee_id, status } = {}) => {
+exports.listPayslips = async (tenantId, { page = 1, limit = 20, payrun_id, employee_id, status } = {}) => {
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('payslips')
-    .select(
+  let query = withTenant(
+    db.from('payslips').select(
       `*, employees(id, first_name, last_name, employee_code), payruns(name, period_start, period_end, status)`,
       { count: 'exact' }
-    );
+    ),
+    tenantId
+  );
 
   if (payrun_id)   query = query.eq('payrun_id', payrun_id);
   if (employee_id) query = query.eq('employee_id', employee_id);
@@ -610,19 +622,18 @@ exports.listPayslips = async ({ page = 1, limit = 20, payrun_id, employee_id, st
   return { payslips: data || [], total: count, page, limit };
 };
 
-exports.getPayslipById = async (id, requestingUser) => {
-  const { data, error } = await db
-    .from('payslips')
-    .select(`
+exports.getPayslipById = async (tenantId, id, requestingUser) => {
+  const { data, error } = await withTenant(
+    db.from('payslips').select(`
       *,
       employees(id, first_name, last_name, employee_code, email, departments!employees_department_id_fkey(name), job_positions(name)),
       payruns(id, name, period_start, period_end, status),
       contracts(wage, employment_type, start_date, end_date),
       salary_structures(name, code),
       payslip_lines(*)
-    `)
-    .eq('id', id)
-    .single();
+    `).eq('id', id),
+    tenantId
+  ).single();
 
   if (error) {
     if (error.code === 'PGRST116') throw new AppError('Payslip not found', 404, PAYROLL_ERRORS.PAYSLIP_NOT_FOUND);
@@ -648,18 +659,18 @@ exports.getPayslipById = async (id, requestingUser) => {
   return data;
 };
 
-exports.getMyPayslips = async (employeeId, { page = 1, limit = 10 } = {}) => {
+exports.getMyPayslips = async (tenantId, employeeId, { page = 1, limit = 10 } = {}) => {
   if (!employeeId) throw new AppError('Employee record not found for this user', 404);
 
   const offset = (page - 1) * limit;
 
-  const { data, error, count } = await db
-    .from('payslips')
-    .select(
+  const { data, error, count } = await withTenant(
+    db.from('payslips').select(
       `*, payruns(name, period_start, period_end), salary_structures(name)`,
       { count: 'exact' }
-    )
-    .eq('employee_id', employeeId)
+    ).eq('employee_id', employeeId),
+    tenantId
+  )
     .range(offset, offset + limit - 1)
     .order('period_start', { ascending: false });
 

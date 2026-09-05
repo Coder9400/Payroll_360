@@ -35,6 +35,40 @@ const signup = async (req, res, next) => {
 };
 
 /**
+ * Register a brand new company (Public endpoint): creates a Tenant, a default
+ * Legal Entity/Department/Job Position/Working Schedule, and the signing-up
+ * user as that tenant's Owner/Admin with their own Employee record.
+ */
+const signupCompany = async (req, res, next) => {
+  try {
+    const { companyName, email, password, firstName, lastName } = req.body;
+
+    const result = await authService.registerCompany({
+      companyName,
+      email,
+      password,
+      firstName,
+      lastName,
+    });
+
+    return sendSuccess(res, {
+      data: {
+        user: result.user,
+        tenant: result.tenant,
+        employee: result.employee,
+        profile: result.profile,
+        roles: result.roles,
+        permissions: result.permissions,
+      },
+      message: 'Company registered successfully',
+      statusCode: 201,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Log in user and generate session
  */
 const login = async (req, res, next) => {
@@ -102,6 +136,7 @@ const getMe = async (req, res, next) => {
       profile:     req.user.profile,
       roles:       req.user.roles,
       permissions: req.user.permissions,
+      tenantId:    req.user.tenantId,
       employee,
     };
 
@@ -154,6 +189,7 @@ const assignRole = async (req, res, next) => {
 
 module.exports = {
   signup,
+  signupCompany,
   login,
   logout,
   getMe,

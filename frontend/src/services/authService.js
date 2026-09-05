@@ -40,6 +40,7 @@ function mapUser(data) {
     roles:       data.roles ?? [],
     permissions: data.permissions ?? [],
     employee:    data.employee ?? null,
+    tenantId:    data.tenantId ?? data.profile?.tenant_id ?? null,
     avatar:      data.profile?.avatar_url ?? null,
   };
 }

@@ -2,52 +2,22 @@
  * Notification Popover
  * ─────────────────────
  * Notification bell with unread badge and popover panel.
+ * Shares state with the Notifications page via notificationsStore.
  *
- * Currently uses mock/dev data. When the backend notification API is ready,
- * replace the MOCK_NOTIFICATIONS array with a real API call (e.g., GET /notifications).
- * The component interface will not need to change.
+ * When the backend notification API is ready, replace notificationsStore
+ * with a real API call — the component interface will not need to change.
  */
 
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCircle, AlertCircle, Clock, Info, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
-
-// ─── DEV MOCK DATA ────────────────────────────────────────────────────────────
-const MOCK_NOTIFICATIONS = [
-  {
-    id: 'notif-001',
-    type: 'success',
-    title: 'Leave request approved',
-    message: 'Your annual leave request for Oct 10–12 has been approved.',
-    timestamp: '2 hours ago',
-    isRead: false,
-  },
-  {
-    id: 'notif-002',
-    type: 'warning',
-    title: 'Attendance regularization pending',
-    message: 'You have 2 attendance entries requiring regularization.',
-    timestamp: '5 hours ago',
-    isRead: false,
-  },
-  {
-    id: 'notif-003',
-    type: 'error',
-    title: 'Payroll validation warning',
-    message: 'Payrun PAY-2026-09 has 3 warnings. Review before finalizing.',
-    timestamp: 'Yesterday',
-    isRead: true,
-  },
-  {
-    id: 'notif-004',
-    type: 'info',
-    title: 'New payslip available',
-    message: 'Your payslip for August 2026 is ready to download.',
-    timestamp: '2 days ago',
-    isRead: true,
-  },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+import {
+  getNotifications,
+  subscribeNotifications,
+  markAllNotificationsRead,
+  dismissNotification as dismissFromStore,
+} from '../../data/notificationsStore';
 
 const notifIcon = {
   success: <CheckCircle className="h-4 w-4 text-emerald-500" />,
@@ -57,18 +27,19 @@ const notifIcon = {
 };
 
 export function NotificationPopover() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = React.useState(false);
-  const [notifications, setNotifications] = React.useState(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = React.useState(getNotifications);
   const panelRef = React.useRef(null);
+
+  // Stay in sync with the shared store (same data as Notifications page)
+  React.useEffect(() => subscribeNotifications(setNotifications), []);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  function markAllRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  }
-
-  function dismissNotification(id) {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  function handleViewAll() {
+    setIsOpen(false);
+    navigate('/notifications');
   }
 
   // Close popover when clicking outside
@@ -118,7 +89,7 @@ export function NotificationPopover() {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={markAllRead}
+                onClick={markAllNotificationsRead}
                 className="text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
               >
                 Mark all read
@@ -151,7 +122,7 @@ export function NotificationPopover() {
                       <button
                         type="button"
                         aria-label="Dismiss notification"
-                        onClick={() => dismissNotification(n.id)}
+                        onClick={() => dismissFromStore(n.id)}
                         className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -171,14 +142,14 @@ export function NotificationPopover() {
             )}
           </ul>
 
-          {/* Footer */}
+          {/* Footer — navigates to the full Notifications page */}
           <div className="border-t border-gray-100 px-4 py-2.5">
             <button
               type="button"
               className="w-full text-center text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors"
-              onClick={() => setIsOpen(false)}
+              onClick={handleViewAll}
             >
-              View all notifications
+              View all notifications →
             </button>
           </div>
         </div>

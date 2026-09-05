@@ -13,6 +13,7 @@ import { EmployeeStatusBadge } from "./EmployeeStatusBadge";
 import { EmptyState } from "../ui/EmptyState";
 import { Spinner } from "../ui/Spinner";
 import { Eye, Edit, PowerOff } from "lucide-react";
+import { formatEnum } from "../../utils/formatLabel";
 
 export function EmployeeTable({ employees, isLoading, onEdit, onDeactivate, sortConfig, onSort }) {
   if (isLoading) {
@@ -78,9 +79,12 @@ export function EmployeeTable({ employees, isLoading, onEdit, onDeactivate, sort
                   className="h-8 w-8"
                 />
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-900">
+                  <Link
+                    to={`/employees/${emp.id}`}
+                    className="text-sm font-medium text-gray-900 hover:text-primary-700 hover:underline"
+                  >
                     {emp.firstName} {emp.lastName}
-                  </span>
+                  </Link>
                   <a href={`mailto:${emp.email}`} className="text-xs text-gray-500 hover:text-primary-600 truncate max-w-[150px]">
                     {emp.email}
                   </a>
@@ -95,7 +99,7 @@ export function EmployeeTable({ employees, isLoading, onEdit, onDeactivate, sort
                  {emp.managerName || <span className="text-gray-400">None</span>}
               </div>
             </TableCell>
-            <TableCell>{emp.employeeType}</TableCell>
+            <TableCell>{formatEnum(emp.employeeType)}</TableCell>
             <TableCell>
                {new Date(emp.joiningDate).toLocaleDateString('en-GB', { 
                   day: 'numeric', month: 'short', year: 'numeric' 

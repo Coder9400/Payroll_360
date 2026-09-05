@@ -18,6 +18,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Organization } from './pages/Organization';
 import { Employees } from './pages/Employees';
 import { EmployeeDetail } from './pages/EmployeeDetail';
+import { MyProfile } from './pages/MyProfile';
 import { Attendance } from './pages/Attendance';
 import { EmployeeAttendance } from './pages/EmployeeAttendance';
 import { AttendanceRegularization } from './pages/AttendanceRegularization';
@@ -31,9 +32,12 @@ import { Contracts } from './pages/Contracts';
 import { ContractDetail } from './pages/ContractDetail';
 import { WorkingSchedules } from './pages/WorkingSchedules';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { Settings } from './pages/Settings';
+import { Notifications } from './pages/Notifications';
 
 // Payroll pages (Phase 4+5)
 import { SalaryStructures } from './pages/SalaryStructures';
+import { SalaryRules } from './pages/SalaryRules';
 import { Payruns } from './pages/Payruns';
 import { PayrunDetail } from './pages/PayrunDetail';
 import { PayslipDetail } from './pages/PayslipDetail';
@@ -102,8 +106,8 @@ function App() {
             <Route
               path="my-profile"
               element={
-                <AuthRoute roles={[R.EMPLOYEE]}>
-                  <PlaceholderPage title="My Profile" description="View and update your personal information" phase="Phase 03" />
+                <AuthRoute roles={ALL}>
+                  <MyProfile />
                 </AuthRoute>
               }
             />
@@ -283,6 +287,14 @@ function App() {
                 </AuthRoute>
               }
             />
+            <Route
+              path="salary-rules"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <SalaryRules />
+                </AuthRoute>
+              }
+            />
 
             {/* ── Reports ──────────────────────────────────────────── */}
             <Route
@@ -290,6 +302,26 @@ function App() {
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
                   <PlaceholderPage title="Reports" description="View analytics and payroll reports" phase="Phase 09" />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Settings ─────────────────────────────────────────── */}
+            <Route
+              path="settings"
+              element={
+                <AuthRoute roles={[R.ADMIN]}>
+                  <Settings />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Notifications ────────────────────────────────────── */}
+            <Route
+              path="notifications"
+              element={
+                <AuthRoute roles={ALL}>
+                  <Notifications />
                 </AuthRoute>
               }
             />

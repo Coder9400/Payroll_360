@@ -2,14 +2,16 @@ const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const logger = require('../utils/logger');
 const { successResponse } = require('../utils/apiResponse');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
 exports.createDepartment = async (req, res, next) => {
   try {
+    const payload = withTenantId(req.body, req.user.tenantId);
     const { data, error } = await db
       .from('departments')
-      .insert([req.body])
+      .insert([payload])
       .select()
       .single();
 
@@ -31,9 +33,10 @@ exports.getDepartments = async (req, res, next) => {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    const { data, error, count } = await db
-      .from('departments')
-      .select('*', { count: 'exact' })
+    const { data, error, count } = await withTenant(
+      db.from('departments').select('*', { count: 'exact' }),
+      req.user.tenantId
+    )
       .range(offset, offset + limit - 1)
       .order('created_at', { ascending: false });
 
@@ -54,11 +57,10 @@ exports.getDepartments = async (req, res, next) => {
 
 exports.getDepartmentById = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('departments')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
+    const { data, error } = await withTenant(
+      db.from('departments').select('*').eq('id', req.params.id),
+      req.user.tenantId
+    ).single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Department not found', 404);
@@ -73,12 +75,11 @@ exports.getDepartmentById = async (req, res, next) => {
 
 exports.updateDepartment = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('departments')
-      .update(req.body)
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { tenant_id, ...body } = req.body || {};
+    const { data, error } = await withTenant(
+      db.from('departments').update(body).eq('id', req.params.id),
+      req.user.tenantId
+    ).select().single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Department not found', 404);
@@ -94,12 +95,10 @@ exports.updateDepartment = async (req, res, next) => {
 
 exports.deleteDepartment = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('departments')
-      .delete()
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { data, error } = await withTenant(
+      db.from('departments').delete().eq('id', req.params.id),
+      req.user.tenantId
+    ).select().single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Department not found', 404);

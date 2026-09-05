@@ -239,6 +239,7 @@ export const routeBreadcrumbs = {
   '/organization': [{ name: 'Organization', href: '/organization' }],
   '/employees': [{ name: 'Employees', href: '/employees' }],
   '/contracts': [{ name: 'Contracts', href: '/contracts' }],
+  '/schedules': [{ name: 'Schedules', href: '/schedules' }],
   '/attendance': [{ name: 'Attendance', href: '/attendance' }],
   '/attendance/regularization': [
     { name: 'Attendance', href: '/attendance' },
@@ -262,9 +263,62 @@ export const routeBreadcrumbs = {
   '/salary-structures': [{ name: 'Salary Structures', href: '/salary-structures' }],
   '/salary-rules': [{ name: 'Salary Rules', href: '/salary-rules' }],
   '/reports': [{ name: 'Reports', href: '/reports' }],
+  '/settings': [{ name: 'Settings', href: '/settings' }],
+  '/notifications': [{ name: 'Notifications', href: '/notifications' }],
   '/my-profile': [{ name: 'My Profile', href: '/my-profile' }],
   '/my-attendance': [{ name: 'My Attendance', href: '/my-attendance' }],
   '/my-time-off': [{ name: 'My Time Off', href: '/my-time-off' }],
   '/my-payslips': [{ name: 'My Payslips', href: '/my-payslips' }],
   '/access-denied': [{ name: 'Access Denied', href: '/access-denied' }],
 };
+
+/**
+ * Dynamic breadcrumb patterns for parameterised routes.
+ * Each entry is [prefixRegex, builder(pathname)].
+ * MainLayout checks these when no exact match is found in routeBreadcrumbs.
+ */
+export const dynamicBreadcrumbs = [
+  [
+    /^\/employees\/[^/]+$/,
+    () => [
+      { name: 'Employees', href: '/employees' },
+      { name: 'Employee Detail', href: '#' },
+    ],
+  ],
+  [
+    /^\/contracts\/[^/]+$/,
+    () => [
+      { name: 'Contracts', href: '/contracts' },
+      { name: 'Contract Detail', href: '#' },
+    ],
+  ],
+  [
+    /^\/payruns\/[^/]+$/,
+    () => [
+      { name: 'Payruns', href: '/payruns' },
+      { name: 'Payrun Detail', href: '#' },
+    ],
+  ],
+  [
+    /^\/payslips\/[^/]+$/,
+    () => [
+      { name: 'Payslips', href: '/payslips' },
+      { name: 'Payslip Detail', href: '#' },
+    ],
+  ],
+  [
+    /^\/attendance\/[^/]+$/,
+    () => [
+      { name: 'Attendance', href: '/attendance' },
+      { name: 'Employee Attendance', href: '#' },
+    ],
+  ],
+  [
+    /^\/time-off\/requests\/[^/]+$/,
+    () => [
+      { name: 'Time Off', href: '/time-off' },
+      { name: 'Requests', href: '/time-off/requests' },
+      { name: 'Request Detail', href: '#' },
+    ],
+  ],
+];

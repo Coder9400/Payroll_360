@@ -151,7 +151,7 @@ export function TopNavbar({ onMenuClick }) {
               {/* Menu items */}
               <div className="py-1">
                 <Link
-                  to={userRole === 'Employee' ? '/my-profile' : '/employees'}
+                  to="/my-profile"
                   id="profile-menu-my-profile"
                   onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
@@ -159,15 +159,15 @@ export function TopNavbar({ onMenuClick }) {
                   <User className="h-4 w-4 text-gray-400" />
                   My Profile
                 </Link>
-                <a
-                  href="#"
+                <Link
+                  to="/settings"
                   id="profile-menu-settings"
                   onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
                 >
                   <Settings className="h-4 w-4 text-gray-400" />
                   Settings
-                </a>
+                </Link>
               </div>
 
               <div className="border-t border-gray-100 py-1">

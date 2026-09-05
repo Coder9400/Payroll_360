@@ -8,6 +8,7 @@
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const { ROLES, PERMISSIONS } = require('../config/rbacConstants');
 const { successResponse } = require('../utils/apiResponse');
+const { withTenant } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
@@ -15,7 +16,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function getOrgStats() {
+async function getOrgStats(tenantId) {
   const today = todayISO();
 
   const [
@@ -25,14 +26,20 @@ async function getOrgStats() {
     { count: pendingLeaveRequests },
     { data: latestPayrun },
   ] = await Promise.all([
-    db.from('employees').select('*', { count: 'exact', head: true }).eq('employment_status', 'ACTIVE'),
-    db.from('attendance').select('*', { count: 'exact', head: true }).eq('attendance_date', today)
+    withTenant(db.from('employees').select('*', { count: 'exact', head: true }), tenantId)
+      .eq('employment_status', 'ACTIVE'),
+    withTenant(db.from('attendance').select('*', { count: 'exact', head: true }), tenantId)
+      .eq('attendance_date', today)
       .in('status', ['PRESENT', 'LATE', 'OVERTIME', 'CORRECTED', 'HALF_DAY']),
-    db.from('time_off_requests').select('*', { count: 'exact', head: true }).eq('status', 'APPROVED')
+    withTenant(db.from('time_off_requests').select('*', { count: 'exact', head: true }), tenantId)
+      .eq('status', 'APPROVED')
       .lte('start_date', today).gte('end_date', today),
-    db.from('time_off_requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
-    db.from('payruns').select('id, name, status, period_start, period_end, total_gross, total_deductions, total_net')
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    withTenant(db.from('time_off_requests').select('*', { count: 'exact', head: true }), tenantId)
+      .eq('status', 'PENDING'),
+    withTenant(
+      db.from('payruns').select('id, name, status, period_start, period_end, total_gross, total_deductions, total_net'),
+      tenantId
+    ).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   return {
@@ -45,7 +52,7 @@ async function getOrgStats() {
   };
 }
 
-async function getEmployeeStats(employeeId) {
+async function getEmployeeStats(tenantId, employeeId) {
   const today = todayISO();
 
   const [
@@ -53,12 +60,16 @@ async function getEmployeeStats(employeeId) {
     { data: allocations },
     { data: latestPayslip },
   ] = await Promise.all([
-    db.from('attendance').select('status, check_in, check_out, worked_hours')
+    withTenant(db.from('attendance').select('status, check_in, check_out, worked_hours'), tenantId)
       .eq('employee_id', employeeId).eq('attendance_date', today).maybeSingle(),
-    db.from('time_off_allocations').select('time_off_type_id, allocated_amount, approved_amount, taken_amount, remaining_amount, time_off_types(name, code)')
-      .eq('employee_id', employeeId).eq('status', 'APPROVED'),
-    db.from('payslips').select('id, period_start, period_end, gross_amount, deduction_amount, net_amount, status')
-      .eq('employee_id', employeeId).in('status', ['VALIDATED', 'PAID'])
+    withTenant(
+      db.from('time_off_allocations').select('time_off_type_id, allocated_amount, approved_amount, taken_amount, remaining_amount, time_off_types(name, code)'),
+      tenantId
+    ).eq('employee_id', employeeId).eq('status', 'APPROVED'),
+    withTenant(
+      db.from('payslips').select('id, period_start, period_end, gross_amount, deduction_amount, net_amount, status'),
+      tenantId
+    ).eq('employee_id', employeeId).in('status', ['VALIDATED', 'PAID'])
       .order('period_end', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
@@ -80,7 +91,7 @@ exports.getStats = async (req, res, next) => {
       (req.user.permissions || []).includes(PERMISSIONS.EMPLOYEE_READ);
 
     if (isOrgViewer) {
-      const data = await getOrgStats();
+      const data = await getOrgStats(req.user.tenantId);
       return successResponse(res, data);
     }
 
@@ -88,7 +99,7 @@ exports.getStats = async (req, res, next) => {
       return successResponse(res, { scope: 'employee', todayAttendance: null, leaveBalances: [], latestPayslip: null });
     }
 
-    const data = await getEmployeeStats(req.user.employee.id);
+    const data = await getEmployeeStats(req.user.tenantId, req.user.employee.id);
     return successResponse(res, data);
   } catch (error) {
     next(error);

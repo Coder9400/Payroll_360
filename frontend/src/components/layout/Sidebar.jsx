@@ -122,18 +122,35 @@ export function Sidebar({ isOpen, setIsOpen }) {
 
         {/* Bottom section */}
         <div className="shrink-0 border-t border-gray-100">
-          {/* Settings link (placeholder) */}
+          {/* Settings link */}
           <div className="px-3 py-2">
-            <a
-              href="#"
-              className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                cn(
+                  'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                  isActive
+                    ? 'bg-primary-50 text-primary-700 shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )
+              }
             >
-              <Settings2
-                className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-gray-600"
-                aria-hidden="true"
-              />
-              Settings
-            </a>
+              {({ isActive }) => (
+                <>
+                  <Settings2
+                    className={cn(
+                      'h-4 w-4 shrink-0 transition-colors',
+                      isActive ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-600'
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span>Settings</span>
+                  {isActive && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-500" />
+                  )}
+                </>
+              )}
+            </NavLink>
           </div>
 
           {/* ── DEV-ONLY: Role Switcher ────────────────────────────────── */}

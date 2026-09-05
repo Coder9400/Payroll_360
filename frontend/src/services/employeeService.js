@@ -69,6 +69,8 @@ export const employeeService = {
     if (params.limit)        query.set('limit', params.limit);
     if (params.search)       query.set('search', params.search);
     if (params.department)   query.set('department_id', params.department);
+    if (params.position)     query.set('job_position_id', params.position);
+    if (params.manager)      query.set('manager_id', params.manager);
     if (params.status)       query.set('employment_status', params.status);
     if (params.employeeType) query.set('employee_type', params.employeeType);
     if (params.sortBy)       query.set('sort_by', params.sortBy);

@@ -1,14 +1,16 @@
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const { successResponse } = require('../utils/apiResponse');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
 exports.createTimeOffType = async (req, res, next) => {
   try {
+    const payload = withTenantId(req.body, req.user.tenantId);
     const { data, error } = await db
       .from('time_off_types')
-      .insert([req.body])
+      .insert([payload])
       .select()
       .single();
 
@@ -28,9 +30,10 @@ exports.getTimeOffTypes = async (req, res, next) => {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    const { data, error, count } = await db
-      .from('time_off_types')
-      .select('*', { count: 'exact' })
+    const { data, error, count } = await withTenant(
+      db.from('time_off_types').select('*', { count: 'exact' }),
+      req.user.tenantId
+    )
       .range(offset, offset + limit - 1)
       .order('created_at', { ascending: false });
 
@@ -51,11 +54,10 @@ exports.getTimeOffTypes = async (req, res, next) => {
 
 exports.getTimeOffTypeById = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('time_off_types')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
+    const { data, error } = await withTenant(
+      db.from('time_off_types').select('*').eq('id', req.params.id),
+      req.user.tenantId
+    ).single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Time Off Type not found', 404);

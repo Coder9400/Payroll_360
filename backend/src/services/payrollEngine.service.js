@@ -140,9 +140,19 @@ function buildPayrollContext({ contract, periodAttendance, periodTimeOff, workin
   const paidDays      = money(workedDays + paidLeaveDays);
   const absentDays    = money(Math.max(0, workingDays - paidDays - unpaidDays));
 
+  // Wage actually payable this period: full contract wage minus a
+  // proportional cut for unpaid leave days (does NOT dock pay for
+  // ordinary/missing attendance — only unpaid leave reduces it). Salary
+  // structures reference this instead of contract_wage directly for BASIC
+  // so unpaid leave visibly and correctly reduces take-home pay.
+  const proratedWage = workingDays > 0
+    ? money(contractWage * Math.max(0, workingDays - unpaidDays) / workingDays)
+    : contractWage;
+
   return {
     // Standard context variable names available in formulas
     contract_wage:      contractWage,
+    prorated_wage:       proratedWage,
     working_days:       workingDays,
     worked_days:        workedDays,
     paid_days:          paidDays,

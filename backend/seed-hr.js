@@ -74,7 +74,12 @@ async function seed() {
   // 4. Time Off Types
   const { error: t1 } = await supabase.from('time_off_types').insert([
     { name: 'Paid Time Off', code: 'PTO', requires_allocation: true, is_active: true },
-    { name: 'Sick Leave', code: 'SICK', requires_allocation: true, is_active: true }
+    { name: 'Sick Leave', code: 'SICK', requires_allocation: true, is_active: true },
+    { name: 'Casual Leave', code: 'CL', requires_allocation: true, is_active: true },
+    { name: 'Earned Leave', code: 'EL', requires_allocation: true, is_active: true },
+    { name: 'Compensatory Off', code: 'COFF', requires_allocation: true, is_active: true },
+    { name: 'Maternity Leave', code: 'ML', requires_allocation: true, is_active: true },
+    { name: 'Unpaid Leave', code: 'UNPAID', requires_allocation: false, is_active: true },
   ]);
   
   if (t1) console.error('Error seeding time off types:', t1.message);

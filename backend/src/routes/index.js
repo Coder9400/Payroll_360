@@ -22,6 +22,8 @@ const timeOffRoutes = require('./timeOff.routes');
 const payrollRoutes = require('./payroll.routes');
 const payrunRoutes  = require('./payrun.routes');
 const payslipRoutes = require('./payslip.routes');
+const settingsRoutes = require('./settings.routes');
+const aiRoutes = require('./ai.routes');
 
 const router = Router();
 
@@ -58,5 +60,11 @@ router.use('/time-off', timeOffRoutes);
 router.use('/payroll', payrollRoutes);
 router.use('/payruns', payrunRoutes);
 router.use('/payslips', payslipRoutes);
+
+// Company settings
+router.use('/settings', settingsRoutes);
+
+// AI features
+router.use('/ai', aiRoutes);
 
 module.exports = router;

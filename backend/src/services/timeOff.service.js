@@ -31,11 +31,21 @@
  * BALANCE RESTORATION ON CANCELLATION
  *   When an APPROVED request is cancelled, taken_amount is decremented and
  *   remaining_amount is restored using the same optimistic locking pattern.
+ *
+ * MULTI-TENANCY
+ *   Every function takes tenantId as its first argument and filters/tags every
+ *   query via withTenant()/withTenantId() — see backend/src/utils/tenantScope.js.
+ *
+ * LEAVE ROUTING
+ *   time_off_requests.recipient_user_id records who a request was addressed to
+ *   (defaults to the employee's manager). HR/Admin can always act as a
+ *   fallback regardless of this value — enforced in the controller, not here.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 const {
   ALLOCATION_STATUS,
   REQUEST_STATUS,
@@ -54,17 +64,30 @@ const db = supabaseAdmin || supabase;
 /**
  * Get employee with their working schedule days.
  */
-async function getEmployeeWithSchedule(employeeId) {
-  const { data, error } = await db
-    .from('employees')
-    .select('*, working_schedules(*, working_schedule_days(*))')
-    .eq('id', employeeId)
-    .single();
+async function getEmployeeWithSchedule(tenantId, employeeId) {
+  const { data, error } = await withTenant(
+    db.from('employees').select('*, working_schedules(*, working_schedule_days(*))').eq('id', employeeId),
+    tenantId
+  ).single();
 
   if (error || !data) {
     throw new AppError('Employee not found', 404, TIME_OFF_ERRORS.EMPLOYEE_NOT_FOUND);
   }
   return data;
+}
+
+/**
+ * Resolve the default recipient for a new request: the employee's manager's
+ * linked user account, falling back to null (HR/Admin catch-all queue only)
+ * if the employee has no manager or the manager has no login yet.
+ */
+async function resolveDefaultRecipient(tenantId, employee) {
+  if (!employee.manager_id) return null;
+  const { data: manager } = await withTenant(
+    db.from('employees').select('user_id').eq('id', employee.manager_id),
+    tenantId
+  ).maybeSingle();
+  return manager?.user_id || null;
 }
 
 /**
@@ -190,14 +213,16 @@ function selectAllocation(allocations, startDate, endDate, required) {
 /**
  * Check for overlapping approved requests for the same employee.
  */
-async function checkOverlap(employeeId, startDate, endDate, excludeRequestId = null) {
-  let query = db
-    .from('time_off_requests')
-    .select('id, start_date, end_date, status')
-    .eq('employee_id', employeeId)
-    .eq('status', REQUEST_STATUS.APPROVED)
-    .lte('start_date', endDate)
-    .gte('end_date', startDate);
+async function checkOverlap(tenantId, employeeId, startDate, endDate, excludeRequestId = null) {
+  let query = withTenant(
+    db.from('time_off_requests')
+      .select('id, start_date, end_date, status')
+      .eq('employee_id', employeeId)
+      .eq('status', REQUEST_STATUS.APPROVED)
+      .lte('start_date', endDate)
+      .gte('end_date', startDate),
+    tenantId
+  );
 
   if (excludeRequestId) {
     query = query.neq('id', excludeRequestId);
@@ -215,24 +240,22 @@ async function checkOverlap(employeeId, startDate, endDate, excludeRequestId = n
 /**
  * Create a new time off allocation (HR only).
  */
-async function createAllocation({ employee_id, time_off_type_id, allocated_amount, valid_from, valid_to, createdBy }) {
+async function createAllocation(tenantId, { employee_id, time_off_type_id, allocated_amount, valid_from, valid_to, createdBy }) {
   // Verify employee exists
-  const { data: emp, error: empErr } = await db
-    .from('employees')
-    .select('id')
-    .eq('id', employee_id)
-    .single();
+  const { data: emp, error: empErr } = await withTenant(
+    db.from('employees').select('id').eq('id', employee_id),
+    tenantId
+  ).single();
 
   if (empErr || !emp) {
     throw new AppError('Employee not found', 404, TIME_OFF_ERRORS.EMPLOYEE_NOT_FOUND);
   }
 
   // Verify time off type exists and is active
-  const { data: tot, error: totErr } = await db
-    .from('time_off_types')
-    .select('id, name, unit, requires_allocation, is_active')
-    .eq('id', time_off_type_id)
-    .single();
+  const { data: tot, error: totErr } = await withTenant(
+    db.from('time_off_types').select('id, name, unit, requires_allocation, is_active').eq('id', time_off_type_id),
+    tenantId
+  ).single();
 
   if (totErr || !tot) {
     throw new AppError('Time off type not found', 404, TIME_OFF_ERRORS.TYPE_NOT_FOUND);
@@ -241,20 +264,22 @@ async function createAllocation({ employee_id, time_off_type_id, allocated_amoun
     throw new AppError('Time off type is not active', 400, TIME_OFF_ERRORS.TYPE_NOT_FOUND);
   }
 
+  const payload = withTenantId({
+    employee_id,
+    time_off_type_id,
+    allocated_amount,
+    approved_amount: 0,
+    taken_amount: 0,
+    remaining_amount: 0,
+    valid_from,
+    valid_to: valid_to || null,
+    status: ALLOCATION_STATUS.DRAFT,
+    created_by: createdBy,
+  }, tenantId);
+
   const { data, error } = await db
     .from('time_off_allocations')
-    .insert([{
-      employee_id,
-      time_off_type_id,
-      allocated_amount,
-      approved_amount: 0,
-      taken_amount: 0,
-      remaining_amount: 0,
-      valid_from,
-      valid_to: valid_to || null,
-      status: ALLOCATION_STATUS.DRAFT,
-      created_by: createdBy,
-    }])
+    .insert([payload])
     .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit)')
     .single();
 
@@ -265,13 +290,14 @@ async function createAllocation({ employee_id, time_off_type_id, allocated_amoun
 /**
  * Get allocations with filters.
  */
-async function getAllocations(filters = {}) {
+async function getAllocations(tenantId, filters = {}) {
   const { page = 1, limit = 20, employee_id, time_off_type_id, status } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('time_off_allocations')
-    .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit, requires_allocation)', { count: 'exact' });
+  let query = withTenant(
+    db.from('time_off_allocations').select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit, requires_allocation)', { count: 'exact' }),
+    tenantId
+  );
 
   if (employee_id) query = query.eq('employee_id', employee_id);
   if (time_off_type_id) query = query.eq('time_off_type_id', time_off_type_id);
@@ -289,12 +315,11 @@ async function getAllocations(filters = {}) {
 /**
  * Get allocation by ID.
  */
-async function getAllocationById(id) {
-  const { data, error } = await db
-    .from('time_off_allocations')
-    .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit, requires_allocation)')
-    .eq('id', id)
-    .single();
+async function getAllocationById(tenantId, id) {
+  const { data, error } = await withTenant(
+    db.from('time_off_allocations').select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit, requires_allocation)').eq('id', id),
+    tenantId
+  ).single();
 
   if (error || !data) {
     throw new AppError('Allocation not found', 404, TIME_OFF_ERRORS.ALLOCATION_NOT_FOUND);
@@ -305,8 +330,8 @@ async function getAllocationById(id) {
 /**
  * Update allocation (HR only, only in DRAFT/PENDING status).
  */
-async function updateAllocation(id, updates) {
-  const existing = await getAllocationById(id);
+async function updateAllocation(tenantId, id, updates) {
+  const existing = await getAllocationById(tenantId, id);
 
   if (![ALLOCATION_STATUS.DRAFT, ALLOCATION_STATUS.PENDING_APPROVAL].includes(existing.status)) {
     throw new AppError(
@@ -316,9 +341,10 @@ async function updateAllocation(id, updates) {
     );
   }
 
+  const { tenant_id, ...safeUpdates } = updates || {};
   const { data, error } = await db
     .from('time_off_allocations')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...safeUpdates, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit)')
     .single();
@@ -331,16 +357,15 @@ async function updateAllocation(id, updates) {
  * Approve an allocation.
  * Sets approved_amount = allocated_amount and remaining_amount = allocated_amount.
  */
-async function approveAllocation(id, approverId) {
-  const existing = await getAllocationById(id);
+async function approveAllocation(tenantId, id, approverId) {
+  const existing = await getAllocationById(tenantId, id);
   validateAllocationTransition(existing.status, ALLOCATION_STATUS.APPROVED);
 
   // Prevent self-approval
-  const { data: approverEmployee } = await db
-    .from('employees')
-    .select('id')
-    .eq('user_id', approverId)
-    .single();
+  const { data: approverEmployee } = await withTenant(
+    db.from('employees').select('id').eq('user_id', approverId),
+    tenantId
+  ).maybeSingle();
 
   if (approverEmployee && approverEmployee.id === existing.employee_id) {
     throw new AppError(
@@ -372,8 +397,8 @@ async function approveAllocation(id, approverId) {
 /**
  * Refuse an allocation.
  */
-async function refuseAllocation(id, approverId, refusal_reason) {
-  const existing = await getAllocationById(id);
+async function refuseAllocation(tenantId, id, approverId, refusal_reason) {
+  const existing = await getAllocationById(tenantId, id);
   validateAllocationTransition(existing.status, ALLOCATION_STATUS.REFUSED);
 
   const now = new Date().toISOString();
@@ -397,8 +422,8 @@ async function refuseAllocation(id, approverId, refusal_reason) {
 /**
  * Delete (cancel) an allocation.
  */
-async function deleteAllocation(id) {
-  const existing = await getAllocationById(id);
+async function deleteAllocation(tenantId, id) {
+  const existing = await getAllocationById(tenantId, id);
 
   if (existing.status === ALLOCATION_STATUS.APPROVED && existing.taken_amount > 0) {
     throw new AppError(
@@ -424,20 +449,23 @@ async function deleteAllocation(id) {
 /**
  * Create a time off request.
  *
- * Duration is always calculated by the backend.
+ * Duration is always calculated by the backend. If recipientUserId is not
+ * explicitly supplied, defaults to the employee's manager (see
+ * resolveDefaultRecipient) — null if the employee has no manager, in which
+ * case only the HR/Admin catch-all queue will see it.
+ *
  * For HOURS type: requester must pass hours in the body (captured as `duration_hours`).
  */
-async function createRequest({ employee_id, time_off_type_id, start_date, end_date, reason, duration_hours, submittedBy }) {
+async function createRequest(tenantId, { employee_id, time_off_type_id, start_date, end_date, reason, duration_hours, recipient_user_id, submittedBy }) {
   // Verify employee
-  const employee = await getEmployeeWithSchedule(employee_id);
+  const employee = await getEmployeeWithSchedule(tenantId, employee_id);
   const scheduleDays = employee.working_schedules?.working_schedule_days || [];
 
   // Verify time off type
-  const { data: tot, error: totErr } = await db
-    .from('time_off_types')
-    .select('*')
-    .eq('id', time_off_type_id)
-    .single();
+  const { data: tot, error: totErr } = await withTenant(
+    db.from('time_off_types').select('*').eq('id', time_off_type_id),
+    tenantId
+  ).single();
 
   if (totErr || !tot) {
     throw new AppError('Time off type not found', 404, TIME_OFF_ERRORS.TYPE_NOT_FOUND);
@@ -460,18 +488,24 @@ async function createRequest({ employee_id, time_off_type_id, start_date, end_da
   // Determine initial status based on requires_approval
   const initialStatus = tot.requires_approval ? REQUEST_STATUS.PENDING : REQUEST_STATUS.APPROVED;
 
+  // Resolve who this request is addressed to
+  const recipientUserId = recipient_user_id || await resolveDefaultRecipient(tenantId, employee);
+
+  const payload = withTenantId({
+    employee_id,
+    time_off_type_id,
+    start_date,
+    end_date,
+    duration,
+    unit: tot.unit,
+    reason: reason || null,
+    status: initialStatus,
+    recipient_user_id: recipientUserId,
+  }, tenantId);
+
   const { data, error } = await db
     .from('time_off_requests')
-    .insert([{
-      employee_id,
-      time_off_type_id,
-      start_date,
-      end_date,
-      duration,
-      unit: tot.unit,
-      reason: reason || null,
-      status: initialStatus,
-    }])
+    .insert([payload])
     .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit, requires_allocation, requires_approval)')
     .single();
 
@@ -479,28 +513,31 @@ async function createRequest({ employee_id, time_off_type_id, start_date, end_da
 
   // If auto-approved (requires_approval = false), consume balance now
   if (initialStatus === REQUEST_STATUS.APPROVED && tot.requires_allocation) {
-    await consumeAllocationBalance(employee_id, time_off_type_id, start_date, end_date, duration, data.id, submittedBy);
+    await consumeAllocationBalance(tenantId, employee_id, time_off_type_id, start_date, end_date, duration, data.id, submittedBy);
   }
 
   return data;
 }
 
 /**
- * Get requests with filters.
+ * Get requests with filters. Pass `recipient_user_id` to scope to a single
+ * manager's personal approval inbox (used by the "sent to me" queue).
  */
-async function getRequests(filters = {}) {
-  const { page = 1, limit = 20, employee_id, time_off_type_id, status, date_from, date_to } = filters;
+async function getRequests(tenantId, filters = {}) {
+  const { page = 1, limit = 20, employee_id, time_off_type_id, status, date_from, date_to, recipient_user_id } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('time_off_requests')
-    .select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit)', { count: 'exact' });
+  let query = withTenant(
+    db.from('time_off_requests').select('*, employees(first_name, last_name, employee_code), time_off_types(name, unit)', { count: 'exact' }),
+    tenantId
+  );
 
   if (employee_id) query = query.eq('employee_id', employee_id);
   if (time_off_type_id) query = query.eq('time_off_type_id', time_off_type_id);
   if (status) query = query.eq('status', status);
   if (date_from) query = query.gte('start_date', date_from);
   if (date_to) query = query.lte('end_date', date_to);
+  if (recipient_user_id) query = query.eq('recipient_user_id', recipient_user_id);
 
   const { data, error, count } = await query
     .range(offset, offset + Number(limit) - 1)
@@ -513,12 +550,11 @@ async function getRequests(filters = {}) {
 /**
  * Get request by ID.
  */
-async function getRequestById(id) {
-  const { data, error } = await db
-    .from('time_off_requests')
-    .select('*, employees(first_name, last_name, employee_code), time_off_types(*)')
-    .eq('id', id)
-    .single();
+async function getRequestById(tenantId, id) {
+  const { data, error } = await withTenant(
+    db.from('time_off_requests').select('*, employees(first_name, last_name, employee_code), time_off_types(*)').eq('id', id),
+    tenantId
+  ).single();
 
   if (error || !data) {
     throw new AppError('Time off request not found', 404, TIME_OFF_ERRORS.REQUEST_NOT_FOUND);
@@ -529,8 +565,8 @@ async function getRequestById(id) {
 /**
  * Update a request (only while in DRAFT status).
  */
-async function updateRequest(id, updates, employeeId) {
-  const existing = await getRequestById(id);
+async function updateRequest(tenantId, id, updates, employeeId) {
+  const existing = await getRequestById(tenantId, id);
 
   if (existing.status !== REQUEST_STATUS.DRAFT) {
     throw new AppError(
@@ -541,9 +577,10 @@ async function updateRequest(id, updates, employeeId) {
   }
 
   // Recalculate duration if dates changed
-  let newData = { ...updates };
+  const { tenant_id, ...safeUpdates } = updates || {};
+  let newData = { ...safeUpdates };
   if (updates.start_date || updates.end_date) {
-    const employee = await getEmployeeWithSchedule(existing.employee_id);
+    const employee = await getEmployeeWithSchedule(tenantId, existing.employee_id);
     const scheduleDays = employee.working_schedules?.working_schedule_days || [];
     const startDate = updates.start_date || existing.start_date;
     const endDate = updates.end_date || existing.end_date;
@@ -564,24 +601,17 @@ async function updateRequest(id, updates, employeeId) {
 /**
  * Consume allocation balance when a request is approved.
  * Uses optimistic concurrency: updates only if remaining_amount >= required.
- *
- * @param {string} employeeId
- * @param {string} timeOffTypeId
- * @param {string} startDate
- * @param {string} endDate
- * @param {number} required - Duration to consume
- * @param {string} requestId
- * @param {string} approverId
  */
-async function consumeAllocationBalance(employeeId, timeOffTypeId, startDate, endDate, required, requestId, approverId) {
+async function consumeAllocationBalance(tenantId, employeeId, timeOffTypeId, startDate, endDate, required, requestId, approverId) {
   // Fetch all APPROVED allocations for this employee/type
-  const { data: allocations, error: allocErr } = await db
-    .from('time_off_allocations')
-    .select('*')
-    .eq('employee_id', employeeId)
-    .eq('time_off_type_id', timeOffTypeId)
-    .eq('status', ALLOCATION_STATUS.APPROVED)
-    .order('valid_to', { ascending: true, nullsFirst: false });
+  const { data: allocations, error: allocErr } = await withTenant(
+    db.from('time_off_allocations')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('time_off_type_id', timeOffTypeId)
+      .eq('status', ALLOCATION_STATUS.APPROVED),
+    tenantId
+  ).order('valid_to', { ascending: true, nullsFirst: false });
 
   if (allocErr) throw new AppError(allocErr.message, 500);
 
@@ -624,16 +654,17 @@ async function consumeAllocationBalance(employeeId, timeOffTypeId, startDate, en
 /**
  * Restore allocation balance when an approved request is cancelled.
  */
-async function restoreAllocationBalance(employeeId, timeOffTypeId, amount, approverId) {
+async function restoreAllocationBalance(tenantId, employeeId, timeOffTypeId, amount, approverId) {
   // Find the allocation that was most likely consumed (taken_amount > 0, earliest expiry first)
-  const { data: allocations, error: allocErr } = await db
-    .from('time_off_allocations')
-    .select('*')
-    .eq('employee_id', employeeId)
-    .eq('time_off_type_id', timeOffTypeId)
-    .eq('status', ALLOCATION_STATUS.APPROVED)
-    .gt('taken_amount', 0)
-    .order('valid_to', { ascending: true, nullsFirst: false });
+  const { data: allocations, error: allocErr } = await withTenant(
+    db.from('time_off_allocations')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('time_off_type_id', timeOffTypeId)
+      .eq('status', ALLOCATION_STATUS.APPROVED)
+      .gt('taken_amount', 0),
+    tenantId
+  ).order('valid_to', { ascending: true, nullsFirst: false });
 
   if (allocErr) throw new AppError(allocErr.message, 500);
 
@@ -667,16 +698,15 @@ async function restoreAllocationBalance(employeeId, timeOffTypeId, amount, appro
  * - Consumes allocation balance (if type requires_allocation)
  * - Uses optimistic concurrency to prevent race conditions
  */
-async function approveRequest(id, approverId) {
-  const existing = await getRequestById(id);
+async function approveRequest(tenantId, id, approverId) {
+  const existing = await getRequestById(tenantId, id);
   validateRequestTransition(existing.status, REQUEST_STATUS.APPROVED);
 
   // Prevent self-approval
-  const { data: approverEmployee } = await db
-    .from('employees')
-    .select('id')
-    .eq('user_id', approverId)
-    .single();
+  const { data: approverEmployee } = await withTenant(
+    db.from('employees').select('id').eq('user_id', approverId),
+    tenantId
+  ).maybeSingle();
 
   if (approverEmployee && approverEmployee.id === existing.employee_id) {
     throw new AppError(
@@ -687,7 +717,7 @@ async function approveRequest(id, approverId) {
   }
 
   // Check overlap with already approved requests
-  const overlapping = await checkOverlap(existing.employee_id, existing.start_date, existing.end_date, id);
+  const overlapping = await checkOverlap(tenantId, existing.employee_id, existing.start_date, existing.end_date, id);
   if (overlapping.length > 0) {
     throw new AppError(
       `Time off request overlaps with an existing approved request (${overlapping[0].start_date} to ${overlapping[0].end_date})`,
@@ -702,6 +732,7 @@ async function approveRequest(id, approverId) {
   // Consume allocation balance if required
   if (tot.requires_allocation) {
     await consumeAllocationBalance(
+      tenantId,
       existing.employee_id,
       existing.time_off_type_id,
       existing.start_date,
@@ -732,8 +763,8 @@ async function approveRequest(id, approverId) {
 /**
  * Refuse a time off request.
  */
-async function refuseRequest(id, approverId, refusal_reason) {
-  const existing = await getRequestById(id);
+async function refuseRequest(tenantId, id, approverId, refusal_reason) {
+  const existing = await getRequestById(tenantId, id);
   validateRequestTransition(existing.status, REQUEST_STATUS.REFUSED);
 
   const now = new Date().toISOString();
@@ -758,8 +789,8 @@ async function refuseRequest(id, approverId, refusal_reason) {
  * Cancel a time off request.
  * If the request was APPROVED, restore the allocation balance.
  */
-async function cancelRequest(id, cancelledBy) {
-  const existing = await getRequestById(id);
+async function cancelRequest(tenantId, id, cancelledBy) {
+  const existing = await getRequestById(tenantId, id);
   validateRequestTransition(existing.status, REQUEST_STATUS.CANCELLED);
 
   const wasApproved = existing.status === REQUEST_STATUS.APPROVED;
@@ -781,6 +812,7 @@ async function cancelRequest(id, cancelledBy) {
   // Restore allocation balance if this was an approved request
   if (wasApproved && existing.time_off_types?.requires_allocation) {
     await restoreAllocationBalance(
+      tenantId,
       existing.employee_id,
       existing.time_off_type_id,
       existing.duration,
@@ -794,8 +826,8 @@ async function cancelRequest(id, cancelledBy) {
 /**
  * Delete a request (only DRAFT or CANCELLED).
  */
-async function deleteRequest(id) {
-  const existing = await getRequestById(id);
+async function deleteRequest(tenantId, id) {
+  const existing = await getRequestById(tenantId, id);
 
   if (![REQUEST_STATUS.DRAFT, REQUEST_STATUS.CANCELLED].includes(existing.status)) {
     throw new AppError(
@@ -818,13 +850,14 @@ async function deleteRequest(id) {
  * Get employee time off balance.
  * Returns all approved allocations with remaining balance for an employee.
  */
-async function getEmployeeBalances(employeeId) {
-  const { data, error } = await db
-    .from('time_off_allocations')
-    .select('*, time_off_types(name, unit, code)')
-    .eq('employee_id', employeeId)
-    .eq('status', ALLOCATION_STATUS.APPROVED)
-    .order('valid_to', { ascending: true, nullsFirst: false });
+async function getEmployeeBalances(tenantId, employeeId) {
+  const { data, error } = await withTenant(
+    db.from('time_off_allocations')
+      .select('*, time_off_types(name, unit, code)')
+      .eq('employee_id', employeeId)
+      .eq('status', ALLOCATION_STATUS.APPROVED),
+    tenantId
+  ).order('valid_to', { ascending: true, nullsFirst: false });
 
   if (error) throw new AppError(error.message, 500);
 
@@ -856,9 +889,9 @@ async function getEmployeeBalances(employeeId) {
 /**
  * Get time off types (re-exported from Phase 1 table).
  */
-async function getTimeOffTypes(filters = {}) {
+async function getTimeOffTypes(tenantId, filters = {}) {
   const { is_active } = filters;
-  let query = db.from('time_off_types').select('*').order('name');
+  let query = withTenant(db.from('time_off_types').select('*'), tenantId).order('name');
   if (is_active !== undefined) query = query.eq('is_active', is_active);
   const { data, error } = await query;
   if (error) throw new AppError(error.message, 500);
@@ -869,18 +902,64 @@ async function getTimeOffTypes(filters = {}) {
  * Check if a given date has an approved leave for an employee.
  * Used by Attendance/absence calculation.
  */
-async function hasApprovedLeaveOnDate(employeeId, date) {
-  const { data, error } = await db
-    .from('time_off_requests')
-    .select('id')
-    .eq('employee_id', employeeId)
-    .eq('status', REQUEST_STATUS.APPROVED)
-    .lte('start_date', date)
-    .gte('end_date', date)
-    .limit(1);
+async function hasApprovedLeaveOnDate(tenantId, employeeId, date) {
+  const { data, error } = await withTenant(
+    db.from('time_off_requests')
+      .select('id')
+      .eq('employee_id', employeeId)
+      .eq('status', REQUEST_STATUS.APPROVED)
+      .lte('start_date', date)
+      .gte('end_date', date),
+    tenantId
+  ).limit(1);
 
   if (error) return false;
   return data && data.length > 0;
+}
+
+/**
+ * Return the manager + tenant HR/Admin users an employee could route a leave
+ * request to, for the "Send to" picker on the request form.
+ */
+async function getApprovalCandidates(tenantId, employeeId) {
+  const { data: employee, error: empErr } = await withTenant(
+    db.from('employees').select('id, manager_id').eq('id', employeeId),
+    tenantId
+  ).single();
+  if (empErr || !employee) throw new AppError('Employee not found', 404, TIME_OFF_ERRORS.EMPLOYEE_NOT_FOUND);
+
+  const candidates = [];
+
+  if (employee.manager_id) {
+    const { data: manager } = await withTenant(
+      db.from('employees').select('user_id, first_name, last_name').eq('id', employee.manager_id),
+      tenantId
+    ).maybeSingle();
+    if (manager?.user_id) {
+      candidates.push({ user_id: manager.user_id, name: `${manager.first_name} ${manager.last_name}`, role: 'Manager' });
+    }
+  }
+
+  const { data: hrUserRoles } = await db
+    .from('user_roles')
+    .select('user_id, roles!inner(slug)')
+    .eq('tenant_id', tenantId)
+    .in('roles.slug', ['admin', 'hr_manager', 'hr_payroll_manager', 'hr_payroll_user']);
+
+  const hrUserIds = [...new Set((hrUserRoles || []).map((r) => r.user_id))]
+    .filter((id) => !candidates.some((c) => c.user_id === id));
+
+  if (hrUserIds.length > 0) {
+    const { data: hrProfiles } = await db
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .in('id', hrUserIds);
+    for (const p of hrProfiles || []) {
+      candidates.push({ user_id: p.id, name: `${p.first_name} ${p.last_name}`, role: 'HR/Admin' });
+    }
+  }
+
+  return candidates;
 }
 
 module.exports = {
@@ -905,6 +984,8 @@ module.exports = {
   getEmployeeBalances,
   // Types
   getTimeOffTypes,
+  // Routing
+  getApprovalCandidates,
   // Utils
   hasApprovedLeaveOnDate,
   calculateDuration,

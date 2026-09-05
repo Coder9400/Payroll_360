@@ -3,16 +3,23 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { TopNavbar } from '../components/layout/TopNavbar';
 import { Breadcrumb } from '../components/layout/Breadcrumb';
-import { routeBreadcrumbs } from '../config/navigationConfig';
+import { routeBreadcrumbs, dynamicBreadcrumbs } from '../config/navigationConfig';
+
+/** Resolve breadcrumb items for the current pathname.
+ *  Priority: exact static match → dynamic regex match → Dashboard fallback. */
+function resolveBreadcrumbs(pathname) {
+  if (routeBreadcrumbs[pathname]) return routeBreadcrumbs[pathname];
+  for (const [regex, builder] of dynamicBreadcrumbs) {
+    if (regex.test(pathname)) return builder(pathname);
+  }
+  return [{ name: 'Dashboard', href: '/dashboard' }];
+}
 
 export function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const location = useLocation();
 
-  // Derive breadcrumb items from current pathname
-  const breadcrumbItems = routeBreadcrumbs[location.pathname] ?? [
-    { name: 'Dashboard', href: '/dashboard' },
-  ];
+  const breadcrumbItems = resolveBreadcrumbs(location.pathname);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">

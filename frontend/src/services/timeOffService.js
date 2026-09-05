@@ -41,6 +41,7 @@ function mapAllocation(a) {
     id:            a.id,
     employeeId:    a.employee_id,
     employeeName:  empName,
+    employeeCode:  a.employees?.employee_code ?? a.employee_code ?? '',
     leaveTypeId:   a.time_off_type_id,
     leaveTypeName: a.time_off_types?.name ?? '',
     year:          a.valid_from ? new Date(a.valid_from).getFullYear() : new Date().getFullYear(),
