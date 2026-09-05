@@ -16,6 +16,7 @@ import { AccessDenied } from './pages/AccessDenied';
 // App pages
 import { Dashboard } from './pages/Dashboard';
 import { Employees } from './pages/Employees';
+import { EmployeeDetail } from './pages/EmployeeDetail';
 import { Attendance } from './pages/Attendance';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
@@ -118,6 +119,14 @@ function App() {
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
                   <Employees />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="employees/:id"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <EmployeeDetail />
                 </AuthRoute>
               }
             />
