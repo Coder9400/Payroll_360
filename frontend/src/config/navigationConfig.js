@@ -111,6 +111,14 @@ export const navigationItems = [
     icon: ClipboardCheck,
     group: 'ATTENDANCE',
     allowedRoles: HR_AND_ABOVE,
+    end: true,
+  },
+  {
+    label: 'Regularization',
+    path: '/attendance/regularization',
+    icon: CalendarClock,
+    group: 'ATTENDANCE',
+    allowedRoles: HR_AND_ABOVE,
   },
 
   // ── Time Off ────────────────────────────────────────────────────────────
@@ -207,6 +215,10 @@ export const routeBreadcrumbs = {
   '/employees': [{ name: 'Employees', href: '/employees' }],
   '/contracts': [{ name: 'Contracts', href: '/contracts' }],
   '/attendance': [{ name: 'Attendance', href: '/attendance' }],
+  '/attendance/regularization': [
+    { name: 'Attendance', href: '/attendance' },
+    { name: 'Regularization', href: '/attendance/regularization' },
+  ],
   '/time-off': [{ name: 'Time Off', href: '/time-off' }],
   '/time-off/requests': [
     { name: 'Time Off', href: '/time-off' },

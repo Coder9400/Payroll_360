@@ -16,7 +16,10 @@ import { AccessDenied } from './pages/AccessDenied';
 // App pages
 import { Dashboard } from './pages/Dashboard';
 import { Employees } from './pages/Employees';
+import { EmployeeDetail } from './pages/EmployeeDetail';
 import { Attendance } from './pages/Attendance';
+import { EmployeeAttendance } from './pages/EmployeeAttendance';
+import { AttendanceRegularization } from './pages/AttendanceRegularization';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
@@ -91,7 +94,7 @@ function App() {
               path="my-attendance"
               element={
                 <AuthRoute roles={[R.EMPLOYEE]}>
-                  <PlaceholderPage title="My Attendance" description="View your attendance records" phase="Phase 03" />
+                  <EmployeeAttendance />
                 </AuthRoute>
               }
             />
@@ -122,6 +125,14 @@ function App() {
               }
             />
             <Route
+              path="employees/:id"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <EmployeeDetail />
+                </AuthRoute>
+              }
+            />
+            <Route
               path="contracts"
               element={
                 <AuthRoute roles={HR_MGR_ROLES}>
@@ -136,6 +147,22 @@ function App() {
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
                   <Attendance />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="attendance/:employeeId"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <EmployeeAttendance />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="attendance/regularization"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <AttendanceRegularization />
                 </AuthRoute>
               }
             />
