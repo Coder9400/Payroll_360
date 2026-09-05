@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { AttendanceFilters } from '../components/attendance/AttendanceFilters';
 import { AttendanceTable } from '../components/attendance/AttendanceTable';
+import { TodayAttendancePanel } from '../components/attendance/TodayAttendancePanel';
 import { attendanceService } from '../services/attendanceService';
 import { Card } from '../components/ui/Card';
-import { Users, UserMinus, Clock, AlertCircle } from 'lucide-react';
+import { Users, UserMinus, Clock, AlertCircle, Timer } from 'lucide-react';
 
 export function Attendance() {
   const navigate = useNavigate();
@@ -102,6 +103,11 @@ export function Attendance() {
             <h3 className="text-2xl font-bold text-gray-900">{metrics.missingCheckout}</h3>
           </div>
         </Card>
+      </div>
+
+      {/* Today's per-employee activity panel */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <TodayAttendancePanel autoRefresh={5 * 60 * 1000} />
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

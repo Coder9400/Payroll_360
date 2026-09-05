@@ -4,29 +4,31 @@ import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 
-export function AllocationTable({ 
-  data, 
-  isLoading, 
-  onSort, 
-  sortField, 
+export function AllocationTable({
+  data,
+  isLoading,
+  onSort,
+  sortField,
   sortDirection,
   onEdit
 }) {
-  
+
   const columns = [
     {
       key: "employee",
       label: "Employee",
       sortable: true,
       render: (row) => (
-        <div className="flex items-center">
-          <Avatar 
-            fallback={`${row.employeeName.split(' ')[0][0]}${row.employeeName.split(' ')[1]?.[0] || ''}`}
-            className="h-8 w-8 mr-3 bg-primary-100 text-primary-700 font-medium"
+        <div className="flex items-center space-x-3">
+          <Avatar
+            fallback={`${(row.employeeName || '?').split(' ')[0]?.[0] || '?'}${(row.employeeName || '').split(' ')[1]?.[0] || ''}`}
+            className="h-8 w-8"
           />
           <div>
-            <span className="text-sm font-medium text-gray-900 block">{row.employeeName}</span>
-            <span className="text-xs text-gray-500 block">{row.employeeId}</span>
+            <span className="text-sm font-medium text-gray-900 block">{row.employeeName || '—'}</span>
+            {row.employeeCode && (
+              <span className="text-xs text-gray-400">{row.employeeCode}</span>
+            )}
           </div>
         </div>
       ),

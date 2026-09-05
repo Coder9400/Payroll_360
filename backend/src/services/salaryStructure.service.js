@@ -3,6 +3,11 @@
  * ─────────────────────────
  * CRUD operations for salary_structures and their salary_rules.
  * All monetary values stored as NUMERIC(12,2) — no floating point.
+ *
+ * salary_rules has no tenant_id of its own (it's a pure child of
+ * salary_structures) — ownership is always checked through its parent
+ * structure's tenant_id, either via an inner-join filter on reads or an
+ * explicit structure lookup before writes.
  */
 
 'use strict';
@@ -10,20 +15,19 @@
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const { PAYROLL_ERRORS } = require('../config/payrollConstants');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
 // ─── Salary Structures ────────────────────────────────────────────────────────
 
-exports.listStructures = async ({ page = 1, limit = 50, is_active } = {}) => {
+exports.listStructures = async (tenantId, { page = 1, limit = 50, is_active } = {}) => {
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('salary_structures')
-    .select(
-      `*, salary_rules(id, is_active)`,
-      { count: 'exact' }
-    );
+  let query = withTenant(
+    db.from('salary_structures').select(`*, salary_rules(id, is_active)`, { count: 'exact' }),
+    tenantId
+  );
 
   if (is_active !== undefined) query = query.eq('is_active', is_active);
 
@@ -44,12 +48,11 @@ exports.listStructures = async ({ page = 1, limit = 50, is_active } = {}) => {
   return { structures, total: count, page, limit };
 };
 
-exports.getStructureById = async (id) => {
-  const { data, error } = await db
-    .from('salary_structures')
-    .select(`*, salary_rules(*)`)
-    .eq('id', id)
-    .single();
+exports.getStructureById = async (tenantId, id) => {
+  const { data, error } = await withTenant(
+    db.from('salary_structures').select(`*, salary_rules(*)`).eq('id', id),
+    tenantId
+  ).single();
 
   if (error) {
     if (error.code === 'PGRST116') throw new AppError('Salary structure not found', 404, PAYROLL_ERRORS.STRUCTURE_NOT_FOUND);
@@ -64,12 +67,13 @@ exports.getStructureById = async (id) => {
   return data;
 };
 
-exports.createStructure = async (body) => {
+exports.createStructure = async (tenantId, body) => {
   const { name, code, description, is_active = true } = body;
 
+  const payload = withTenantId({ name, code: code.toUpperCase(), description, is_active }, tenantId);
   const { data, error } = await db
     .from('salary_structures')
-    .insert([{ name, code: code.toUpperCase(), description, is_active }])
+    .insert([payload])
     .select()
     .single();
 
@@ -81,7 +85,7 @@ exports.createStructure = async (body) => {
   return data;
 };
 
-exports.updateStructure = async (id, body) => {
+exports.updateStructure = async (tenantId, id, body) => {
   // Don't allow code changes (would break existing payslip references)
   const { name, description, is_active } = body;
   const updates = {};
@@ -90,12 +94,10 @@ exports.updateStructure = async (id, body) => {
   if (is_active !== undefined) updates.is_active   = is_active;
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await db
-    .from('salary_structures')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+  const { data, error } = await withTenant(
+    db.from('salary_structures').update(updates).eq('id', id),
+    tenantId
+  ).select().single();
 
   if (error) {
     if (error.code === 'PGRST116') throw new AppError('Salary structure not found', 404, PAYROLL_ERRORS.STRUCTURE_NOT_FOUND);
@@ -105,12 +107,12 @@ exports.updateStructure = async (id, body) => {
   return data;
 };
 
-exports.deleteStructure = async (id) => {
+exports.deleteStructure = async (tenantId, id) => {
   // Prevent deletion if payruns reference this structure
-  const { count } = await db
-    .from('payruns')
-    .select('id', { count: 'exact', head: true })
-    .eq('salary_structure_id', id);
+  const { count } = await withTenant(
+    db.from('payruns').select('id', { count: 'exact', head: true }).eq('salary_structure_id', id),
+    tenantId
+  );
 
   if (count > 0) {
     throw new AppError(
@@ -119,20 +121,24 @@ exports.deleteStructure = async (id) => {
     );
   }
 
-  const { error } = await db
-    .from('salary_structures')
-    .delete()
-    .eq('id', id);
+  const { error } = await withTenant(
+    db.from('salary_structures').delete().eq('id', id),
+    tenantId
+  );
 
   if (error) throw new AppError(error.message, 500);
 };
 
 // ─── Salary Rules ─────────────────────────────────────────────────────────────
+// salary_rules carries no tenant_id — ownership flows through
+// salary_structure_id, so every operation either inner-joins salary_structures
+// and filters on its tenant_id, or explicitly checks the parent structure.
 
-exports.listRules = async ({ structure_id, is_active } = {}) => {
+exports.listRules = async (tenantId, { structure_id, is_active } = {}) => {
   let query = db
     .from('salary_rules')
-    .select(`*, salary_structures(name, code)`);
+    .select(`*, salary_structures!inner(name, code, tenant_id)`)
+    .eq('salary_structures.tenant_id', tenantId);
 
   if (structure_id) query = query.eq('salary_structure_id', structure_id);
   if (is_active !== undefined) query = query.eq('is_active', is_active);
@@ -143,11 +149,12 @@ exports.listRules = async ({ structure_id, is_active } = {}) => {
   return data || [];
 };
 
-exports.getRuleById = async (id) => {
+exports.getRuleById = async (tenantId, id) => {
   const { data, error } = await db
     .from('salary_rules')
-    .select(`*, salary_structures(name, code)`)
+    .select(`*, salary_structures!inner(name, code, tenant_id)`)
     .eq('id', id)
+    .eq('salary_structures.tenant_id', tenantId)
     .single();
 
   if (error) {
@@ -158,12 +165,21 @@ exports.getRuleById = async (id) => {
   return data;
 };
 
-exports.createRule = async (body) => {
+exports.createRule = async (tenantId, body) => {
   const {
     salary_structure_id, name, code, category, sequence,
     computation_type, fixed_amount, percentage_base, percentage_value,
     formula, condition_formula, is_active = true,
   } = body;
+
+  // Confirm the parent structure actually belongs to this tenant before
+  // attaching a rule to it.
+  const { data: structure, error: structureErr } = await withTenant(
+    db.from('salary_structures').select('id').eq('id', salary_structure_id),
+    tenantId
+  ).maybeSingle();
+  if (structureErr) throw new AppError(structureErr.message, 500);
+  if (!structure) throw new AppError('Salary structure not found', 404, PAYROLL_ERRORS.STRUCTURE_NOT_FOUND);
 
   const { data, error } = await db
     .from('salary_rules')
@@ -193,7 +209,10 @@ exports.createRule = async (body) => {
   return data;
 };
 
-exports.updateRule = async (id, body) => {
+exports.updateRule = async (tenantId, id, body) => {
+  // Confirm the rule belongs to a structure owned by this tenant.
+  await exports.getRuleById(tenantId, id);
+
   const allowed = [
     'name', 'category', 'sequence', 'computation_type',
     'fixed_amount', 'percentage_base', 'percentage_value',
@@ -221,7 +240,10 @@ exports.updateRule = async (id, body) => {
   return data;
 };
 
-exports.deleteRule = async (id) => {
+exports.deleteRule = async (tenantId, id) => {
+  // Confirm the rule belongs to a structure owned by this tenant.
+  await exports.getRuleById(tenantId, id);
+
   // Check if used in computed payslip lines
   const { count } = await db
     .from('payslip_lines')

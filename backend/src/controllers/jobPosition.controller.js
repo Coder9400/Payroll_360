@@ -1,14 +1,16 @@
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const { successResponse } = require('../utils/apiResponse');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
 exports.createJobPosition = async (req, res, next) => {
   try {
+    const payload = withTenantId(req.body, req.user.tenantId);
     const { data, error } = await db
       .from('job_positions')
-      .insert([req.body])
+      .insert([payload])
       .select('*, departments(name)')
       .single();
 
@@ -29,9 +31,10 @@ exports.getJobPositions = async (req, res, next) => {
     const { page = 1, limit = 20, department_id } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = db
-      .from('job_positions')
-      .select('*, departments(name, code)', { count: 'exact' });
+    let query = withTenant(
+      db.from('job_positions').select('*, departments(name, code)', { count: 'exact' }),
+      req.user.tenantId
+    );
 
     if (department_id) {
       query = query.eq('department_id', department_id);
@@ -58,11 +61,10 @@ exports.getJobPositions = async (req, res, next) => {
 
 exports.getJobPositionById = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('job_positions')
-      .select('*, departments(*)')
-      .eq('id', req.params.id)
-      .single();
+    const { data, error } = await withTenant(
+      db.from('job_positions').select('*, departments(*)').eq('id', req.params.id),
+      req.user.tenantId
+    ).single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Job Position not found', 404);
@@ -77,12 +79,11 @@ exports.getJobPositionById = async (req, res, next) => {
 
 exports.updateJobPosition = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('job_positions')
-      .update(req.body)
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { tenant_id, ...body } = req.body || {};
+    const { data, error } = await withTenant(
+      db.from('job_positions').update(body).eq('id', req.params.id),
+      req.user.tenantId
+    ).select().single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Job Position not found', 404);
@@ -99,12 +100,10 @@ exports.updateJobPosition = async (req, res, next) => {
 
 exports.deleteJobPosition = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('job_positions')
-      .delete()
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { data, error } = await withTenant(
+      db.from('job_positions').delete().eq('id', req.params.id),
+      req.user.tenantId
+    ).select().single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Job Position not found', 404);

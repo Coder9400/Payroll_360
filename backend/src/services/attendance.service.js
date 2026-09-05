@@ -44,6 +44,7 @@
 
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
+const { withTenant } = require('../utils/tenantScope');
 const { ATTENDANCE_STATUS, ATTENDANCE_ERRORS } = require('../config/attendanceConstants');
 
 const db = supabaseAdmin || supabase;
@@ -80,12 +81,11 @@ async function resolveEmployeeFromUser(userId) {
  * @param {string} employeeId
  * @returns {Promise<object>}
  */
-async function getEmployeeWithSchedule(employeeId) {
-  const { data, error } = await db
-    .from('employees')
-    .select('*, working_schedules(*, working_schedule_days(*))')
-    .eq('id', employeeId)
-    .single();
+async function getEmployeeWithSchedule(tenantId, employeeId) {
+  const { data, error } = await withTenant(
+    db.from('employees').select('*, working_schedules(*, working_schedule_days(*))').eq('id', employeeId),
+    tenantId
+  ).single();
 
   if (error || !data) {
     throw new AppError('Employee not found', 404, ATTENDANCE_ERRORS.EMPLOYEE_NOT_FOUND);
@@ -190,11 +190,11 @@ function determineStatus({ checkIn, workedHours, expectedStart, expectedHours, i
  * @param {string} params.createdBy - User UUID performing the action
  * @returns {Promise<object>} Created attendance record
  */
-async function checkIn({ userId, employeeId, notes, createdBy }) {
+async function checkIn({ tenantId, userId, employeeId, notes, createdBy }) {
   // Resolve employee
   let employee;
   if (employeeId) {
-    employee = await getEmployeeWithSchedule(employeeId);
+    employee = await getEmployeeWithSchedule(tenantId, employeeId);
   } else {
     employee = await resolveEmployeeFromUser(userId);
   }
@@ -241,6 +241,7 @@ async function checkIn({ userId, employeeId, notes, createdBy }) {
   const { data, error } = await db
     .from('attendance')
     .insert([{
+      tenant_id: employee.tenant_id,
       employee_id: employee.id,
       attendance_date: todayStr,
       check_in: now.toISOString(),
@@ -285,11 +286,11 @@ async function checkIn({ userId, employeeId, notes, createdBy }) {
  * @param {string} params.updatedBy
  * @returns {Promise<object>} Updated attendance record
  */
-async function checkOut({ userId, employeeId, notes, updatedBy }) {
+async function checkOut({ tenantId, userId, employeeId, notes, updatedBy }) {
   // Resolve employee
   let employee;
   if (employeeId) {
-    employee = await getEmployeeWithSchedule(employeeId);
+    employee = await getEmployeeWithSchedule(tenantId, employeeId);
   } else {
     employee = await resolveEmployeeFromUser(userId);
   }
@@ -372,12 +373,11 @@ async function checkOut({ userId, employeeId, notes, updatedBy }) {
  * @param {string} params.updatedBy
  * @returns {Promise<object>} Updated attendance record
  */
-async function correctAttendance({ attendanceId, corrections, updatedBy }) {
-  const { data: existing, error: fetchError } = await db
-    .from('attendance')
-    .select('*')
-    .eq('id', attendanceId)
-    .single();
+async function correctAttendance({ tenantId, attendanceId, corrections, updatedBy }) {
+  const { data: existing, error: fetchError } = await withTenant(
+    db.from('attendance').select('*').eq('id', attendanceId),
+    tenantId
+  ).single();
 
   if (fetchError || !existing) {
     throw new AppError('Attendance record not found', 404, ATTENDANCE_ERRORS.NOT_FOUND);
@@ -455,16 +455,17 @@ async function correctAttendance({ attendanceId, corrections, updatedBy }) {
  * @param {number} [filters.limit=20]
  * @returns {Promise<object>} Paginated attendance list
  */
-async function getAttendance(filters = {}) {
+async function getAttendance(tenantId, filters = {}) {
   const { page = 1, limit = 20, employee_id, date_from, date_to, status, department_id } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db
-    .from('attendance')
-    .select(
+  let query = withTenant(
+    db.from('attendance').select(
       '*, employees!inner(id, first_name, last_name, employee_code, department_id)',
       { count: 'exact' }
-    );
+    ),
+    tenantId
+  );
 
   if (employee_id) query = query.eq('employee_id', employee_id);
   if (date_from) query = query.gte('attendance_date', date_from);
@@ -491,12 +492,11 @@ async function getAttendance(filters = {}) {
 /**
  * Get single attendance record by ID.
  */
-async function getAttendanceById(id) {
-  const { data, error } = await db
-    .from('attendance')
-    .select('*, employees(first_name, last_name, employee_code)')
-    .eq('id', id)
-    .single();
+async function getAttendanceById(tenantId, id) {
+  const { data, error } = await withTenant(
+    db.from('attendance').select('*, employees(first_name, last_name, employee_code)').eq('id', id),
+    tenantId
+  ).single();
 
   if (error || !data) {
     throw new AppError('Attendance record not found', 404, ATTENDANCE_ERRORS.NOT_FOUND);
@@ -508,8 +508,8 @@ async function getAttendanceById(id) {
 /**
  * Get attendance for a specific employee.
  */
-async function getEmployeeAttendance(employeeId, filters = {}) {
-  return getAttendance({ ...filters, employee_id: employeeId });
+async function getEmployeeAttendance(tenantId, employeeId, filters = {}) {
+  return getAttendance(tenantId, { ...filters, employee_id: employeeId });
 }
 
 /**

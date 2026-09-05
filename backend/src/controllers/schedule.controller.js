@@ -1,6 +1,7 @@
 const { supabaseAdmin, supabase } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const { successResponse } = require('../utils/apiResponse');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 
 const db = supabaseAdmin || supabase;
 
@@ -36,7 +37,7 @@ exports.createSchedule = async (req, res, next) => {
     // We'll insert schedule first, then days
     const { data: schedule, error: scheduleError } = await db
       .from('working_schedules')
-      .insert([{ name, code, hours_week }])
+      .insert([withTenantId({ name, code, hours_week }, req.user.tenantId)])
       .select()
       .single();
 
@@ -77,9 +78,10 @@ exports.getSchedules = async (req, res, next) => {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    const { data, error, count } = await db
-      .from('working_schedules')
-      .select('*, working_schedule_days(*)', { count: 'exact' })
+    const { data, error, count } = await withTenant(
+      db.from('working_schedules').select('*, working_schedule_days(*)', { count: 'exact' }),
+      req.user.tenantId
+    )
       .range(offset, offset + limit - 1)
       .order('created_at', { ascending: false });
 
@@ -100,11 +102,10 @@ exports.getSchedules = async (req, res, next) => {
 
 exports.getScheduleById = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('working_schedules')
-      .select('*, working_schedule_days(*)')
-      .eq('id', req.params.id)
-      .single();
+    const { data, error } = await withTenant(
+      db.from('working_schedules').select('*, working_schedule_days(*)').eq('id', req.params.id),
+      req.user.tenantId
+    ).single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Working Schedule not found', 404);

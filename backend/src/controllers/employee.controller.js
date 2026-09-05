@@ -2,15 +2,17 @@ const { supabaseAdmin, supabase, isConfigured } = require('../config/supabase');
 const AppError = require('../utils/appError');
 const { successResponse } = require('../utils/apiResponse');
 const { ROLES, PERMISSIONS } = require('../config/rbacConstants');
+const { withTenant, withTenantId } = require('../utils/tenantScope');
 const crypto = require('crypto');
 
 const db = supabaseAdmin || supabase;
 
 exports.createEmployee = async (req, res, next) => {
   try {
+    const payload = withTenantId(req.body, req.user.tenantId);
     const { data, error } = await db
       .from('employees')
-      .insert([req.body])
+      .insert([payload])
       .select('*, departments!employees_department_id_fkey(name), job_positions(name)')
       .single();
 
@@ -33,12 +35,22 @@ exports.createEmployee = async (req, res, next) => {
 
 exports.getEmployees = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, department_id, manager_id, employment_status } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      department_id,
+      manager_id,
+      employment_status,
+      employee_type,
+      job_position_id,
+      search,
+    } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = db
-      .from('employees')
-      .select('*, departments!employees_department_id_fkey(name), job_positions(name), working_schedules(name)', { count: 'exact' });
+    let query = withTenant(
+      db.from('employees').select('*, departments!employees_department_id_fkey(name), job_positions(name), working_schedules(name), manager:manager_id(id, first_name, last_name)', { count: 'exact' }),
+      req.user.tenantId
+    );
 
     // --- DATA ISOLATION ---
     // If the user does not have full read access (only read_own), restrict the query to their own ID.
@@ -51,6 +63,14 @@ exports.getEmployees = async (req, res, next) => {
       if (department_id) query = query.eq('department_id', department_id);
       if (manager_id) query = query.eq('manager_id', manager_id);
       if (employment_status) query = query.eq('employment_status', employment_status);
+      if (employee_type) query = query.eq('employee_type', employee_type);
+      if (job_position_id) query = query.eq('job_position_id', job_position_id);
+      if (search && String(search).trim()) {
+        const term = String(search).trim().replace(/[,()%]/g, '');
+        query = query.or(
+          `first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%,employee_code.ilike.%${term}%`
+        );
+      }
     }
 
     const { data, error, count } = await query
@@ -81,11 +101,12 @@ exports.getEmployeeById = async (req, res, next) => {
       }
     }
 
-    const { data, error } = await db
-      .from('employees')
-      .select('*, departments!employees_department_id_fkey(*), job_positions(*), working_schedules(*), manager:manager_id(id, first_name, last_name)')
-      .eq('id', req.params.id)
-      .single();
+    const { data, error } = await withTenant(
+      db.from('employees')
+        .select('*, departments!employees_department_id_fkey(*), job_positions(*), working_schedules(*), manager:manager_id(id, first_name, last_name)')
+        .eq('id', req.params.id),
+      req.user.tenantId
+    ).single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Employee not found', 404);
@@ -100,12 +121,11 @@ exports.getEmployeeById = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from('employees')
-      .update(req.body)
-      .eq('id', req.params.id)
-      .select()
-      .single();
+    const { tenant_id, ...body } = req.body || {};
+    const { data, error } = await withTenant(
+      db.from('employees').update(body).eq('id', req.params.id),
+      req.user.tenantId
+    ).select().single();
 
     if (error) {
       if (error.code === 'PGRST116') throw new AppError('Employee not found', 404);
@@ -128,12 +148,11 @@ exports.provisionAccount = async (req, res, next) => {
       throw new AppError('Supabase Admin is not configured', 500);
     }
 
-    // 1. Fetch Employee
-    const { data: employee, error: empErr } = await db
-      .from('employees')
-      .select('*')
-      .eq('id', employeeId)
-      .single();
+    // 1. Fetch Employee (tenant-scoped, so a cross-tenant id 404s instead of leaking)
+    const { data: employee, error: empErr } = await withTenant(
+      db.from('employees').select('*').eq('id', employeeId),
+      req.user.tenantId
+    ).single();
 
     if (empErr || !employee) throw new AppError('Employee not found', 404);
     if (employee.user_id) throw new AppError('Employee already has a provisioned account', 400);
@@ -162,19 +181,23 @@ exports.provisionAccount = async (req, res, next) => {
 
     const authUser = authData.user;
 
-    // 4. Upsert Profile
+    // 4. Upsert Profile (same tenant as the employee being provisioned)
     await db.from('profiles').upsert({
       id: authUser.id,
       email: employee.email,
       first_name: employee.first_name,
       last_name: employee.last_name,
-      is_active: true
+      is_active: true,
+      tenant_id: employee.tenant_id,
     });
 
     // 5. Assign Employee Role
     const { data: roleData } = await db.from('roles').select('id').eq('slug', ROLES.EMPLOYEE).single();
     if (roleData) {
-      await db.from('user_roles').upsert({ user_id: authUser.id, role_id: roleData.id });
+      await db.from('user_roles').upsert(
+        { user_id: authUser.id, role_id: roleData.id, tenant_id: employee.tenant_id },
+        { onConflict: 'user_id,role_id' }
+      );
     }
 
     // 6. Link Employee to User
@@ -199,11 +222,10 @@ exports.disableAccount = async (req, res, next) => {
   try {
     const employeeId = req.params.id;
 
-    const { data: employee, error: empErr } = await db
-      .from('employees')
-      .select('user_id')
-      .eq('id', employeeId)
-      .single();
+    const { data: employee, error: empErr } = await withTenant(
+      db.from('employees').select('user_id').eq('id', employeeId),
+      req.user.tenantId
+    ).single();
 
     if (empErr || !employee) throw new AppError('Employee not found', 404);
     if (!employee.user_id) throw new AppError('Employee does not have a provisioned account', 400);

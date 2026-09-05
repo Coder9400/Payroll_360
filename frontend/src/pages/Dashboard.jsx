@@ -15,6 +15,7 @@ import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 import { dashboardService } from '../services/dashboardService';
+import { TodayAttendancePanel } from '../components/attendance/TodayAttendancePanel';
 
 function StatCard({ label, value, icon: Icon, iconBg, iconColor, sub }) {
   return (
@@ -190,6 +191,11 @@ function AdminHrDashboard({ stats, userRole }) {
             View payruns <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+      </div>
+
+      {/* Today's presence mini-panel */}
+      <div className="mt-4 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <TodayAttendancePanel limit={6} autoRefresh={5 * 60 * 1000} />
       </div>
     </>
   );

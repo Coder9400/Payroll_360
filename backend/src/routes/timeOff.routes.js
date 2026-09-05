@@ -116,15 +116,18 @@ router.delete(
   timeOffController.deleteRequest
 );
 
+// No route-level permission gate here on purpose: requirePermission() requires
+// ALL listed permissions (AND, not OR), so it can't express "HR/Admin OR the
+// request's chosen recipient" — a plain employee acting as someone's manager
+// would never hold leave:approve. Authorization is instead fully enforced in
+// the controller via canActOnRequest() (isHRUser() OR recipient_user_id match).
 router.post(
   '/requests/:id/approve',
-  requirePermission(PERMISSIONS.LEAVE_APPROVE),
   timeOffController.approveRequest
 );
 
 router.post(
   '/requests/:id/refuse',
-  requirePermission(PERMISSIONS.LEAVE_APPROVE),
   validate(refuseRequestSchema),
   timeOffController.refuseRequest
 );

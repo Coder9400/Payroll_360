@@ -3,7 +3,9 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { timeOffService } from "../../services/timeOffService";
+import { aiService } from "../../services/aiService";
 import { useAuth } from "../../context/AuthContext";
+import { Sparkles } from "lucide-react";
 
 export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
   const { currentUser } = useAuth();
@@ -19,6 +21,30 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
   const [leaveTypes, setLeaveTypes] = React.useState([]);
   const [balances, setBalances] = React.useState([]);
   const [isDataLoading, setIsDataLoading] = React.useState(true);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+
+  const handleGenerateAI = async () => {
+    setIsGenerating(true);
+    setErrors({ ...errors, ai: null });
+    
+    try {
+      const typeName = leaveTypes.find(t => t.id === formData.leaveTypeId)?.name || '';
+      const generatedMessage = await aiService.generateLeaveMessage(
+        typeName,
+        formData.startDate,
+        formData.endDate,
+        formData.reason
+      );
+      setFormData(prev => ({ ...prev, reason: generatedMessage }));
+    } catch (err) {
+      setErrors(prev => ({ 
+        ...prev, 
+        ai: err.message || "Failed to generate AI message. Please try again or write it manually." 
+      }));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   React.useEffect(() => {
     async function loadData() {
@@ -57,13 +83,12 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
   let hasInsufficientBalance = false;
   
   if (selectedType && selectedType.requiresAllocation) {
-    const year = formData.startDate ? new Date(formData.startDate).getFullYear() : new Date().getFullYear();
-    allocation = balances.find(b => b.leaveTypeId === selectedType.id && b.year === year);
+    allocation = balances.find(b => b.leaveTypeId === selectedType.id);
     if (allocation) {
       remainingAfter = allocation.remaining - duration;
       hasInsufficientBalance = remainingAfter < 0;
     } else {
-      hasInsufficientBalance = true; // Required allocation but none exists
+      hasInsufficientBalance = true; // Required allocation but none found for this type
     }
   }
 
@@ -172,19 +197,40 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Reason <span className="text-red-500">*</span>
-        </label>
+        <div className="flex justify-between items-center mb-1">
+          <label className="block text-sm font-medium text-gray-700">
+            Reason <span className="text-red-500">*</span>
+          </label>
+          <button
+            type="button"
+            onClick={handleGenerateAI}
+            disabled={isGenerating}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-600 hover:text-purple-700 disabled:opacity-50 transition-colors"
+          >
+            {isGenerating ? (
+              <span className="flex items-center gap-1">
+                <span className="animate-spin h-3 w-3 border-2 border-purple-600 border-t-transparent rounded-full" />
+                Generating...
+              </span>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" />
+                AI Draft
+              </>
+            )}
+          </button>
+        </div>
         <textarea
           className={`w-full rounded-md border shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm p-2.5 ${
             errors.reason ? "border-red-500" : "border-gray-300"
           }`}
           rows="3"
-          placeholder="Please provide a reason for your leave request..."
+          placeholder="Please provide a reason for your leave request (or type a few words and click AI Draft)..."
           value={formData.reason}
           onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
         />
         {errors.reason && <p className="text-red-500 text-xs mt-1">{errors.reason}</p>}
+        {errors.ai && <p className="text-orange-500 text-xs mt-1">{errors.ai}</p>}
       </div>
 
       <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

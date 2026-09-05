@@ -134,7 +134,22 @@ export function PayslipDetail() {
                 
                 <span className="text-gray-500">Paid Days</span>
                 <span className="col-span-2 text-gray-900">{payslip.paid_days} <span className="text-xs text-gray-400 ml-1">({payslip.worked_days} worked + {payslip.paid_leave_days} leave)</span></span>
+
+                {Number(payslip.unpaid_leave_days) > 0 && (
+                  <>
+                    <span className="text-amber-600">Unpaid Leave</span>
+                    <span className="col-span-2 font-medium text-amber-700">
+                      {payslip.unpaid_leave_days} day{payslip.unpaid_leave_days === 1 ? '' : 's'}
+                    </span>
+                  </>
+                )}
               </div>
+
+              {Number(payslip.unpaid_leave_days) > 0 && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Basic Salary was reduced for {payslip.unpaid_leave_days} unpaid leave day{payslip.unpaid_leave_days === 1 ? '' : 's'} out of {payslip.working_days} working days this period.
+                </div>
+              )}
             </div>
           </div>
         </div>

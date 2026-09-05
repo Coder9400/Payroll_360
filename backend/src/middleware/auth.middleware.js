@@ -22,6 +22,11 @@ const requireAuth = () => {
       const token = parts[1];
       const { user, profile, roles, permissions } = await authService.validateTokenAndGetUser(token);
 
+      const tenantId = profile?.tenant_id || null;
+      if (!tenantId) {
+        return next(new AppError('Tenant context could not be resolved for this user', 403, 'TENANT_NOT_RESOLVED'));
+      }
+
       let employee = null;
       if (isConfigured && (supabaseAdmin || supabase)) {
         const client = supabaseAdmin || supabase;
@@ -37,6 +42,7 @@ const requireAuth = () => {
       req.user = {
         id: user.id,
         email: user.email,
+        tenantId,
         profile,
         roles,
         permissions,

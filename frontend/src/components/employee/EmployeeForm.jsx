@@ -2,6 +2,7 @@ import * as React from "react";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
+import { employeeTypeOptions, statusOptions } from "../../utils/formatLabel";
 
 export function EmployeeForm({ 
   initialData = {}, 
@@ -17,12 +18,13 @@ export function EmployeeForm({
     phone: "",
     dob: "",
     employeeId: "",
-    department: "",
-    position: "",
+    departmentId: "",
+    jobPositionId: "",
+    workingScheduleId: "",
     manager: "",
-    employeeType: "Full Time",
+    employeeType: "FULL_TIME",
     joiningDate: "",
-    status: "Active",
+    status: "ACTIVE",
     workEmail: "",
     workPhone: "",
     ...initialData
@@ -49,8 +51,9 @@ export function EmployeeForm({
       newErrors.email = "Invalid email format";
     }
     if (!formData.employeeId.trim()) newErrors.employeeId = "Employee ID is required";
-    if (!formData.department) newErrors.department = "Department is required";
-    if (!formData.position) newErrors.position = "Job position is required";
+    if (!formData.departmentId) newErrors.departmentId = "Department is required";
+    if (!formData.jobPositionId) newErrors.jobPositionId = "Job position is required";
+    if (!formData.workingScheduleId) newErrors.workingScheduleId = "Working schedule is required";
     if (!formData.joiningDate) newErrors.joiningDate = "Joining date is required";
 
     setErrors(newErrors);
@@ -131,24 +134,40 @@ export function EmployeeForm({
             onChange={handleChange}
             error={errors.joiningDate}
           />
-          <Select 
-            name="department"
-            value={formData.department}
+          <Select
+            name="departmentId"
+            label="Department"
+            placeholder="Select department"
+            value={formData.departmentId}
             onChange={handleChange}
-            options={(refData?.departments || []).map(d => ({ value: d, label: d }))}
-            error={errors.department}
+            options={(refData?.departmentOptions || []).map(d => ({ value: d.id, label: d.label ?? d.name }))}
+            error={errors.departmentId}
             className="w-full"
           />
-          <Select 
-            name="position"
-            value={formData.position}
+          <Select
+            name="jobPositionId"
+            label="Job position"
+            placeholder="Select position"
+            value={formData.jobPositionId}
             onChange={handleChange}
-            options={(refData?.positions || []).map(p => ({ value: p, label: p }))}
-            error={errors.position}
+            options={(refData?.positionOptions || []).map(p => ({ value: p.id, label: p.label ?? p.name }))}
+            error={errors.jobPositionId}
             className="w-full"
           />
-          <Select 
+          <Select
+            name="workingScheduleId"
+            label="Working schedule"
+            placeholder="Select schedule"
+            value={formData.workingScheduleId}
+            onChange={handleChange}
+            options={refData?.schedules || []}
+            error={errors.workingScheduleId}
+            className="w-full"
+          />
+          <Select
             name="manager"
+            label="Manager"
+            placeholder="No manager"
             value={formData.manager}
             onChange={handleChange}
             options={refData?.managers || []}
@@ -156,16 +175,18 @@ export function EmployeeForm({
           />
           <Select 
             name="employeeType"
+            label="Type"
             value={formData.employeeType}
             onChange={handleChange}
-            options={(refData?.employeeTypes || []).map(e => ({ value: e, label: e }))}
+            options={employeeTypeOptions()}
             className="w-full"
           />
           <Select 
             name="status"
+            label="Status"
             value={formData.status}
             onChange={handleChange}
-            options={(refData?.statuses || []).map(s => ({ value: s, label: s }))}
+            options={statusOptions()}
             className="w-full"
           />
         </div>

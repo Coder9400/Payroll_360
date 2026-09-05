@@ -1,10 +1,12 @@
 import * as React from "react";
 import { Badge } from "../ui/Badge";
+import { formatEnum } from "../../utils/formatLabel";
 
 export function EmployeeStatusBadge({ status, className }) {
   let variant = "gray";
-  
-  switch (status?.toLowerCase()) {
+  const key = status?.toLowerCase().replace(/_/g, ' ');
+
+  switch (key) {
     case "active":
       variant = "success";
       break;
@@ -26,7 +28,7 @@ export function EmployeeStatusBadge({ status, className }) {
 
   return (
     <Badge variant={variant} className={className}>
-      {status || "Unknown"}
+      {formatEnum(status) || "Unknown"}
     </Badge>
   );
 }

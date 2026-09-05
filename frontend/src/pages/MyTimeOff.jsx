@@ -7,7 +7,8 @@ import { timeOffService } from '../services/timeOffService';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
-import { Plus } from 'lucide-react';
+import { Plus, CheckCircle, X } from 'lucide-react';
+import { addNotification } from '../data/notificationsStore';
 
 export function MyTimeOff() {
   const { currentUser } = useAuth();
@@ -18,6 +19,7 @@ export function MyTimeOff() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [successBanner, setSuccessBanner] = React.useState(null);
 
   const fetchData = React.useCallback(async () => {
     if (!employeeId) { setIsLoading(false); return; }
@@ -53,11 +55,30 @@ export function MyTimeOff() {
   const handleSubmitRequest = async (formData) => {
     setIsSubmitting(true);
     try {
-      await timeOffService.createLeaveRequest(formData);
+      const request = await timeOffService.createLeaveRequest(formData);
       setIsFormOpen(false);
+
+      // ── Notify HR & Admin via the shared notification store ──────────────
+      const employeeName = currentUser?.name ?? 'An employee';
+      const leaveTypeName = request?.leaveTypeName ?? 'leave';
+      const start  = request?.startDate  ?? formData.startDate  ?? '';
+      const end    = request?.endDate    ?? formData.endDate    ?? '';
+      const days   = request?.duration   ?? '';
+
+      addNotification({
+        type: 'warning',
+        title: `Leave request — ${employeeName}`,
+        message: `${employeeName} has applied for ${days ? `${days} day(s) of ` : ''}${leaveTypeName}` +
+          `${start ? ` from ${start}` : ''}${end && end !== start ? ` to ${end}` : ''}. Pending your approval.`,
+      });
+
+      // Show in-page success banner
+      setSuccessBanner(`Your ${leaveTypeName} request has been submitted. HR has been notified.`);
+      setTimeout(() => setSuccessBanner(null), 8000);
+
       await fetchData(); // Refresh balances and requests
     } catch (error) {
-      console.error("Error creating request", error);
+      console.error('Error creating request', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -74,6 +95,21 @@ export function MyTimeOff() {
           <Plus className="mr-2 h-4 w-4" /> Apply Leave
         </Button>
       </div>
+
+      {/* Success banner */}
+      {successBanner && (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="flex-1 text-sm text-emerald-800">{successBanner}</p>
+          <button
+            type="button"
+            onClick={() => setSuccessBanner(null)}
+            className="text-emerald-500 hover:text-emerald-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-gray-900">Leave Balances</h3>

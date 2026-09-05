@@ -26,6 +26,7 @@ router.get('/:id/attendance', requirePermission(PERMISSIONS.ATTENDANCE_READ_OWN)
 
 // Phase 2: Employee time off sub-routes
 router.get('/:id/time-off/balances', requirePermission(PERMISSIONS.LEAVE_READ_OWN), timeOffController.getEmployeeBalances);
+router.get('/:id/time-off/approval-candidates', requirePermission(PERMISSIONS.LEAVE_READ_OWN), timeOffController.getApprovalCandidates);
 router.get('/:id/time-off', requirePermission(PERMISSIONS.LEAVE_READ_OWN), timeOffController.getEmployeeRequests);
 
 module.exports = router;

@@ -84,7 +84,7 @@ const EMPLOYEES = [
 // ─── Salary Structure ──────────────────────────────────────────────────────────
 const SALARY_STRUCTURE = { name: 'Software Engineer Monthly', code: 'SWE-MONTHLY', description: 'Monthly salary structure for Software Engineers' };
 const SALARY_RULES = [
-  { code: 'BASIC', name: 'Basic Salary',       category: 'BASIC',      sequence: 10, computation_type: 'PERCENTAGE', fixed_amount: null, percentage_base: 'contract_wage', percentage_value: 100 },
+  { code: 'BASIC', name: 'Basic Salary',       category: 'BASIC',      sequence: 10, computation_type: 'PERCENTAGE', fixed_amount: null, percentage_base: 'prorated_wage', percentage_value: 100 },
   { code: 'HRA',   name: 'House Rent Allowance', category: 'ALLOWANCE', sequence: 20, computation_type: 'PERCENTAGE', percentage_base: 'BASIC', percentage_value: 40 },
   { code: 'PF',    name: 'Provident Fund',     category: 'DEDUCTION',  sequence: 30, computation_type: 'FORMULA',    formula: '(BASIC + HRA) * 0.12' },
 ];

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { AllocationTable } from '../components/timeOff/AllocationTable';
 import { timeOffService } from '../services/timeOffService';
+import { employeeService } from '../services/employeeService';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
@@ -12,30 +13,34 @@ export function LeaveAllocations() {
   const [allocations, setAllocations] = React.useState([]);
   const [leaveTypes, setLeaveTypes] = React.useState([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  
+
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  
-  const [formData, setFormData] = React.useState({
-    employeeName: '',
+
+  const EMPTY_FORM = {
     employeeId: '',
     leaveTypeId: '',
     year: new Date().getFullYear(),
-    allocated: ''
-  });
+    allocated: '',
+  };
+
+  const [formData, setFormData] = React.useState(EMPTY_FORM);
   const [errors, setErrors] = React.useState({});
+  const [employees, setEmployees] = React.useState([]);
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [allocs, types] = await Promise.all([
-        timeOffService.getLeaveAllocations(),
-        timeOffService.getLeaveTypes()
+      const [allocs, types, empRes] = await Promise.all([
+        timeOffService.getLeaveAllocations({ limit: 200 }),
+        timeOffService.getLeaveTypes(),
+        employeeService.getEmployees({ limit: 500, status: 'ACTIVE' }),
       ]);
       setAllocations(allocs);
       setLeaveTypes(types.filter(t => t.requiresAllocation && t.isActive));
+      setEmployees(empRes.data ?? []);
     } catch (error) {
-      console.error("Failed to load allocations", error);
+      console.error('Failed to load allocations', error);
     } finally {
       setIsLoading(false);
     }
@@ -47,12 +52,11 @@ export function LeaveAllocations() {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.employeeName.trim()) newErrors.employeeName = "Employee name is required";
-    if (!formData.employeeId.trim()) newErrors.employeeId = "Employee ID is required";
-    if (!formData.leaveTypeId) newErrors.leaveTypeId = "Leave Type is required";
-    if (!formData.year || isNaN(formData.year)) newErrors.year = "Valid year is required";
+    if (!formData.employeeId) newErrors.employeeId = 'Employee is required';
+    if (!formData.leaveTypeId) newErrors.leaveTypeId = 'Leave Type is required';
+    if (!formData.year || isNaN(formData.year)) newErrors.year = 'Valid year is required';
     if (!formData.allocated || isNaN(formData.allocated) || Number(formData.allocated) <= 0) {
-      newErrors.allocated = "Valid positive allocation amount is required";
+      newErrors.allocated = 'Valid positive allocation amount is required';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -61,29 +65,28 @@ export function LeaveAllocations() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    
+
     setIsSubmitting(true);
     try {
       await timeOffService.createLeaveAllocation({
         ...formData,
         year: Number(formData.year),
-        allocated: Number(formData.allocated)
+        allocated: Number(formData.allocated),
       });
       setIsModalOpen(false);
-      setFormData({
-        employeeName: '',
-        employeeId: '',
-        leaveTypeId: '',
-        year: new Date().getFullYear(),
-        allocated: ''
-      });
+      setFormData(EMPTY_FORM);
       await fetchData();
     } catch (error) {
-      console.error("Failed to create allocation", error);
+      console.error('Failed to create allocation', error);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const employeeOptions = employees.map((e) => ({
+    value: e.id,
+    label: `${e.firstName} ${e.lastName} (${e.employeeId})`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -98,43 +101,31 @@ export function LeaveAllocations() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <AllocationTable 
+        <AllocationTable
           data={allocations}
           isLoading={isLoading}
         />
       </div>
 
-      <Modal 
+      <Modal
         isOpen={isModalOpen}
         onClose={() => !isSubmitting && setIsModalOpen(false)}
         title="Create Leave Allocation"
       >
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employee Name <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={formData.employeeName}
-                onChange={(e) => setFormData({ ...formData, employeeName: e.target.value })}
-                placeholder="e.g. Rahul Sharma"
-                className={errors.employeeName ? "border-red-500" : ""}
-              />
-              {errors.employeeName && <p className="text-red-500 text-xs mt-1">{errors.employeeName}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Employee ID <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={formData.employeeId}
-                onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                placeholder="e.g. EMP-005"
-                className={errors.employeeId ? "border-red-500" : ""}
-              />
-              {errors.employeeId && <p className="text-red-500 text-xs mt-1">{errors.employeeId}</p>}
-            </div>
+          {/* Employee dropdown — replaces the old broken free-text inputs */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Employee <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeId}
+              onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+              options={employeeOptions}
+              placeholder="Select an employee"
+              className={errors.employeeId ? 'border-red-500' : ''}
+            />
+            {errors.employeeId && <p className="text-red-500 text-xs mt-1">{errors.employeeId}</p>}
           </div>
 
           <div>
@@ -144,7 +135,7 @@ export function LeaveAllocations() {
             <Select
               value={formData.leaveTypeId}
               onChange={(e) => setFormData({ ...formData, leaveTypeId: e.target.value })}
-              className={errors.leaveTypeId ? "border-red-500" : ""}
+              className={errors.leaveTypeId ? 'border-red-500' : ''}
             >
               <option value="">Select a leave type</option>
               {leaveTypes.map(lt => (
@@ -163,7 +154,7 @@ export function LeaveAllocations() {
                 type="number"
                 value={formData.year}
                 onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                className={errors.year ? "border-red-500" : ""}
+                className={errors.year ? 'border-red-500' : ''}
               />
               {errors.year && <p className="text-red-500 text-xs mt-1">{errors.year}</p>}
             </div>
@@ -176,7 +167,7 @@ export function LeaveAllocations() {
                 step="0.5"
                 value={formData.allocated}
                 onChange={(e) => setFormData({ ...formData, allocated: e.target.value })}
-                className={errors.allocated ? "border-red-500" : ""}
+                className={errors.allocated ? 'border-red-500' : ''}
               />
               {errors.allocated && <p className="text-red-500 text-xs mt-1">{errors.allocated}</p>}
             </div>
@@ -195,3 +186,4 @@ export function LeaveAllocations() {
     </div>
   );
 }
+

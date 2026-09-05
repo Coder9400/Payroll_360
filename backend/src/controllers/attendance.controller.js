@@ -39,6 +39,7 @@ exports.checkIn = async (req, res, next) => {
     }
 
     const record = await attendanceService.checkIn({
+      tenantId: req.user.tenantId,
       userId,
       employeeId,
       notes: req.body.notes,
@@ -74,6 +75,7 @@ exports.checkOut = async (req, res, next) => {
     }
 
     const record = await attendanceService.checkOut({
+      tenantId: req.user.tenantId,
       userId,
       employeeId,
       notes: req.body.notes,
@@ -110,7 +112,7 @@ exports.getAttendance = async (req, res, next) => {
       filters.employee_id = req.user.employee.id;
     }
 
-    const result = await attendanceService.getAttendance(filters);
+    const result = await attendanceService.getAttendance(req.user.tenantId, filters);
 
     return res.status(200).json({ success: true, ...result });
   } catch (error) {
@@ -127,7 +129,7 @@ exports.getAttendanceById = async (req, res, next) => {
     const userPermissions = req.user.permissions || [];
     const userId = req.user.id;
 
-    const record = await attendanceService.getAttendanceById(req.params.id);
+    const record = await attendanceService.getAttendanceById(req.user.tenantId, req.params.id);
 
     const isHR = userRoles.includes(ROLES.ADMIN) || userPermissions.includes(PERMISSIONS.ATTENDANCE_READ);
 
@@ -152,6 +154,7 @@ exports.getAttendanceById = async (req, res, next) => {
 exports.correctAttendance = async (req, res, next) => {
   try {
     const record = await attendanceService.correctAttendance({
+      tenantId: req.user.tenantId,
       attendanceId: req.params.id,
       corrections: req.body,
       updatedBy: req.user.id,
@@ -182,7 +185,7 @@ exports.getEmployeeAttendance = async (req, res, next) => {
       }
     }
 
-    const result = await attendanceService.getEmployeeAttendance(targetEmployeeId, req.query);
+    const result = await attendanceService.getEmployeeAttendance(req.user.tenantId, targetEmployeeId, req.query);
     return res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);

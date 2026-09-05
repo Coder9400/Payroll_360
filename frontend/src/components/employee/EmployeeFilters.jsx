@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
+import { employeeTypeOptions, statusOptions } from "../../utils/formatLabel";
 
 export function EmployeeFilters({ filters, setFilters, refData, onClear }) {
   const handleChange = (e) => {
@@ -10,42 +11,66 @@ export function EmployeeFilters({ filters, setFilters, refData, onClear }) {
 
   const hasActiveFilters = filters.department || filters.position || filters.status || filters.employeeType || filters.manager;
 
+  const departmentOptions = (refData?.departmentOptions || []).map((d) => ({
+    value: d.id,
+    label: d.label ?? d.name,
+  }));
+
+  // Deduplicate by id — the backend can return the same position for multiple employees
+  const positionOptions = Array.from(
+    new Map(
+      (refData?.positionOptions || []).map((p) => [p.id, p])
+    ).values()
+  ).map((p) => ({
+    value: p.id,
+    label: p.label ?? p.name,
+  }));
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 bg-white p-4 rounded-lg border border-gray-200 mb-4">
-      
-      <Select 
+      <Select
         name="department"
+        label="Department"
         value={filters.department}
         onChange={handleChange}
-        options={(refData?.departments || []).map(d => ({ value: d, label: d }))}
+        options={departmentOptions}
+        placeholder="All departments"
         className="w-full"
       />
-      <Select 
+      <Select
         name="position"
+        label="Job position"
         value={filters.position}
         onChange={handleChange}
-        options={(refData?.positions || []).map(p => ({ value: p, label: p }))}
+        options={positionOptions}
+        placeholder="All positions"
         className="w-full"
       />
-      <Select 
-        name="status"
-        value={filters.status}
-        onChange={handleChange}
-        options={(refData?.statuses || []).map(s => ({ value: s, label: s }))}
-        className="w-full"
-      />
-      <Select 
-        name="employeeType"
-        value={filters.employeeType}
-        onChange={handleChange}
-        options={(refData?.employeeTypes || []).map(e => ({ value: e, label: e }))}
-        className="w-full"
-      />
-      <Select 
+      <Select
         name="manager"
+        label="Manager"
         value={filters.manager}
         onChange={handleChange}
         options={refData?.managers || []}
+        placeholder="All managers"
+        className="w-full"
+      />
+      <Select
+        name="employeeType"
+        label="Type"
+        value={filters.employeeType}
+        onChange={handleChange}
+        options={employeeTypeOptions()}
+        placeholder="All types"
+        className="w-full"
+      />
+      <Select
+        name="status"
+        label="Status"
+        value={filters.status}
+        onChange={handleChange}
+        options={statusOptions()}
+        placeholder="All statuses"
         className="w-full"
       />
 
