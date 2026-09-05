@@ -12,10 +12,14 @@ const { PERMISSIONS } = require('../config/rbacConstants');
 router.use(requireAuth());
 
 // Phase 1: Employee CRUD
-router.post('/', requirePermission('create:employees'), validate(createEmployeeSchema), employeeController.createEmployee);
-router.get('/', requirePermission('read:employees'), employeeController.getEmployees);
-router.get('/:id', requirePermission('read:employees'), employeeController.getEmployeeById);
-router.put('/:id', requirePermission('update:employees'), validate(updateEmployeeSchema), employeeController.updateEmployee);
+router.post('/', requirePermission(PERMISSIONS.EMPLOYEE_CREATE), validate(createEmployeeSchema), employeeController.createEmployee);
+router.get('/', requirePermission(PERMISSIONS.EMPLOYEE_READ), employeeController.getEmployees);
+router.get('/:id', requirePermission(PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_READ_OWN), employeeController.getEmployeeById);
+router.put('/:id', requirePermission(PERMISSIONS.EMPLOYEE_UPDATE), validate(updateEmployeeSchema), employeeController.updateEmployee);
+
+// Account Provisioning
+router.post('/:id/provision-account', requirePermission(PERMISSIONS.EMPLOYEE_CREATE, PERMISSIONS.ADMIN_USERS_MANAGE), employeeController.provisionAccount);
+router.post('/:id/disable-account', requirePermission(PERMISSIONS.EMPLOYEE_UPDATE, PERMISSIONS.ADMIN_USERS_MANAGE), employeeController.disableAccount);
 
 // Phase 2: Employee attendance sub-routes
 router.get('/:id/attendance', requirePermission(PERMISSIONS.ATTENDANCE_READ_OWN), attendanceController.getEmployeeAttendance);

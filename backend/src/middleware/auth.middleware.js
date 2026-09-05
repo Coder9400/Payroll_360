@@ -1,5 +1,6 @@
 const authService = require('../services/auth.service');
 const AppError = require('../utils/appError');
+const { supabaseAdmin, supabase, isConfigured } = require('../config/supabase');
 
 /**
  * Authentication middleware that verifies Supabase bearer tokens
@@ -21,6 +22,17 @@ const requireAuth = () => {
       const token = parts[1];
       const { user, profile, roles, permissions } = await authService.validateTokenAndGetUser(token);
 
+      let employee = null;
+      if (isConfigured && (supabaseAdmin || supabase)) {
+        const client = supabaseAdmin || supabase;
+        const { data: empData } = await client
+          .from('employees')
+          .select('id, employee_code, first_name, last_name, department_id, employment_status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (empData) employee = empData;
+      }
+
       // Attach trusted security context to Express request
       req.user = {
         id: user.id,
@@ -28,6 +40,7 @@ const requireAuth = () => {
         profile,
         roles,
         permissions,
+        employee,
       };
 
       next();

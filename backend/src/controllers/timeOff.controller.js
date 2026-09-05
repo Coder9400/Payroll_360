@@ -121,8 +121,10 @@ exports.createRequest = async (req, res, next) => {
     let employeeId = req.body.employee_id;
     if (!userHR) {
       // Employee: resolve from auth user, ignore any employee_id in body
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      employeeId = myEmployee.id;
+      if (!req.user.employee) {
+        return next(new AppError('No employee record linked to this user', 400, 'BAD_REQUEST'));
+      }
+      employeeId = req.user.employee.id;
     }
 
     if (!employeeId) {
@@ -154,12 +156,10 @@ exports.getRequests = async (req, res, next) => {
 
     if (!userHR) {
       // Employee: only own requests
-      try {
-        const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-        filters.employee_id = myEmployee.id;
-      } catch (_) {
+      if (!req.user.employee) {
         return res.status(200).json({ success: true, data: [], total: 0, page: 1, limit: 20, totalPages: 0 });
       }
+      filters.employee_id = req.user.employee.id;
     }
 
     const result = await timeOffService.getRequests(filters);
@@ -177,8 +177,7 @@ exports.getRequestById = async (req, res, next) => {
     const data = await timeOffService.getRequestById(req.params.id);
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (data.employee_id !== myEmployee.id) {
+      if (!req.user.employee || data.employee_id !== req.user.employee.id) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -197,8 +196,7 @@ exports.updateRequest = async (req, res, next) => {
     const existing = await timeOffService.getRequestById(req.params.id);
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (existing.employee_id !== myEmployee.id) {
+      if (!req.user.employee || existing.employee_id !== req.user.employee.id) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -218,8 +216,7 @@ exports.deleteRequest = async (req, res, next) => {
     const existing = await timeOffService.getRequestById(req.params.id);
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (existing.employee_id !== myEmployee.id) {
+      if (!req.user.employee || existing.employee_id !== req.user.employee.id) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -257,8 +254,7 @@ exports.cancelRequest = async (req, res, next) => {
     const existing = await timeOffService.getRequestById(req.params.id);
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (existing.employee_id !== myEmployee.id) {
+      if (!req.user.employee || existing.employee_id !== req.user.employee.id) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -281,8 +277,7 @@ exports.getEmployeeBalances = async (req, res, next) => {
     const targetEmployeeId = req.params.id;
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (myEmployee.id !== targetEmployeeId) {
+      if (!req.user.employee || req.user.employee.id !== targetEmployeeId) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -301,8 +296,7 @@ exports.getEmployeeRequests = async (req, res, next) => {
     const targetEmployeeId = req.params.id;
 
     if (!userHR) {
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (myEmployee.id !== targetEmployeeId) {
+      if (!req.user.employee || req.user.employee.id !== targetEmployeeId) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
