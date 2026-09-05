@@ -6,10 +6,12 @@ import { LeaveRequestForm } from '../components/timeOff/LeaveRequestForm';
 import { timeOffService } from '../services/timeOffService';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { useAuth } from '../context/AuthContext';
 import { Plus } from 'lucide-react';
 
 export function MyTimeOff() {
-  const employeeId = 'EMP-001'; // Mock current user
+  const { currentUser } = useAuth();
+  const employeeId = currentUser?.employee?.id ?? null;
 
   const [balances, setBalances] = React.useState([]);
   const [requests, setRequests] = React.useState([]);
@@ -18,6 +20,7 @@ export function MyTimeOff() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const fetchData = React.useCallback(async () => {
+    if (!employeeId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
       const [userBalances, userRequests] = await Promise.all([

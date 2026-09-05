@@ -4,12 +4,13 @@ const validate = require('../middleware/validate.middleware');
 const { createWorkingScheduleSchema } = require('../validators/hr.validator');
 const scheduleController = require('../controllers/schedule.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { requirePermission } = require('../middleware/rbac.middleware');
+const { requireRole } = require('../middleware/rbac.middleware');
+const { ROLES } = require('../config/rbacConstants');
 
 router.use(requireAuth());
 
-router.post('/', requirePermission('create:hr_master'), validate(createWorkingScheduleSchema), scheduleController.createSchedule);
-router.get('/', requirePermission('read:hr_master'), scheduleController.getSchedules);
-router.get('/:id', requirePermission('read:hr_master'), scheduleController.getScheduleById);
+router.post('/', requireRole(ROLES.ADMIN, ROLES.HR_MANAGER), validate(createWorkingScheduleSchema), scheduleController.createSchedule);
+router.get('/', scheduleController.getSchedules);
+router.get('/:id', scheduleController.getScheduleById);
 
 module.exports = router;

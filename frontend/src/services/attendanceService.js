@@ -14,14 +14,15 @@ function unwrap(response) {
 // Map backend attendance record → frontend format
 function mapRecord(r) {
   if (!r) return null;
-  const empName = r.employee
-    ? `${r.employee.first_name} ${r.employee.last_name}`
+  const emp = r.employees ?? r.employee ?? {};
+  const empName = emp.first_name
+    ? `${emp.first_name} ${emp.last_name}`
     : (r.employee_name ?? '');
   return {
     id:             r.id,
     employeeId:     r.employee_id,
     employeeName:   empName,
-    department:     r.employee?.department?.name ?? '',
+    department:     emp.department?.name ?? '',
     date:           r.attendance_date,
     checkIn:        r.check_in,
     checkOut:       r.check_out,

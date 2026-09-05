@@ -3,8 +3,11 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 import { timeOffService } from "../../services/timeOffService";
+import { useAuth } from "../../context/AuthContext";
 
 export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
+  const { currentUser } = useAuth();
+  const employeeId = currentUser?.employee?.id ?? null;
   const [formData, setFormData] = React.useState({
     leaveTypeId: "",
     startDate: "",
@@ -20,11 +23,11 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
   React.useEffect(() => {
     async function loadData() {
       try {
-        const [types, currentBalances] = await Promise.all([
-          timeOffService.getLeaveTypes(),
-          // Assume EMP-001 is the current logged-in user for mock purposes
-          timeOffService.getEmployeeLeaveBalance('EMP-001')
-        ]);
+        const promises = [timeOffService.getLeaveTypes()];
+        if (employeeId) {
+          promises.push(timeOffService.getEmployeeLeaveBalance(employeeId));
+        }
+        const [types, currentBalances = []] = await Promise.all(promises);
         setLeaveTypes(types.filter(t => t.isActive));
         setBalances(currentBalances);
       } catch (err) {
@@ -34,7 +37,7 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
       }
     }
     loadData();
-  }, []);
+  }, [employeeId]);
 
   const selectedType = leaveTypes.find(t => t.id === formData.leaveTypeId);
   
@@ -86,7 +89,7 @@ export function LeaveRequestForm({ onSubmit, onCancel, isLoading }) {
     if (!validate()) return;
     onSubmit({
       ...formData,
-      employeeId: 'EMP-001' // Mock ID
+      employeeId, // resolved from auth context
     });
   };
 
