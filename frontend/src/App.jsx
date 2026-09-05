@@ -20,6 +20,12 @@ import { EmployeeDetail } from './pages/EmployeeDetail';
 import { Attendance } from './pages/Attendance';
 import { EmployeeAttendance } from './pages/EmployeeAttendance';
 import { AttendanceRegularization } from './pages/AttendanceRegularization';
+import { MyTimeOff } from './pages/MyTimeOff';
+import { TimeOff } from './pages/TimeOff';
+import { LeaveRequests } from './pages/LeaveRequests';
+import { LeaveRequestDetail } from './pages/LeaveRequestDetail';
+import { LeaveAllocations } from './pages/LeaveAllocations';
+import { LeaveTypes } from './pages/LeaveTypes';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
@@ -102,7 +108,7 @@ function App() {
               path="my-time-off"
               element={
                 <AuthRoute roles={[R.EMPLOYEE]}>
-                  <PlaceholderPage title="My Time Off" description="View and request time off" phase="Phase 04" />
+                  <MyTimeOff />
                 </AuthRoute>
               }
             />
@@ -172,7 +178,7 @@ function App() {
               path="time-off"
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
-                  <PlaceholderPage title="Time Off" description="Manage time off types and policies" phase="Phase 04" />
+                  <TimeOff />
                 </AuthRoute>
               }
             />
@@ -180,15 +186,31 @@ function App() {
               path="time-off/requests"
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
-                  <PlaceholderPage title="Time Off Requests" description="Review and approve leave requests" phase="Phase 04" />
+                  <LeaveRequests />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="time-off/requests/:id"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <LeaveRequestDetail />
                 </AuthRoute>
               }
             />
             <Route
               path="time-off/allocations"
               element={
-                <AuthRoute roles={HR_MGR_ROLES}>
-                  <PlaceholderPage title="Time Off Allocations" description="Manage leave allocations" phase="Phase 04" />
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <LeaveAllocations />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="time-off/types"
+              element={
+                <AuthRoute roles={[R.HR_MANAGER, R.ADMIN]}>
+                  <LeaveTypes />
                 </AuthRoute>
               }
             />
