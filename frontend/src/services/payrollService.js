@@ -4,7 +4,7 @@ import { salaryRuleService } from './salaryRuleService';
 
 const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
 
-let mockPayruns = [
+export let mockPayruns = [
   {
     id: 'PR-2025-01',
     name: 'January 2025 Payroll',
@@ -16,9 +16,11 @@ let mockPayruns = [
     totalNet: 116600,
     employeeCount: 2,
     createdAt: '2025-01-25T10:00:00Z',
+    payslipsGenerated: false,
     payslips: [
       {
         id: 'PS-1',
+        payslipNumber: 'PS-2025-01-001',
         employeeId: 'EMP-001',
         contractId: 'CON-001',
         basic: 80000,
@@ -26,7 +28,15 @@ let mockPayruns = [
         gross: 114000,
         deductions: 200,
         net: 113800,
-        status: 'Validated'
+        status: 'Validated',
+        emailStatus: 'Not Sent',
+        generatedAt: null,
+        breakdown: [
+          { ruleId: 'RUL-001', ruleName: 'Basic Salary', category: 'Basic', amount: 80000 },
+          { ruleId: 'RUL-002', ruleName: 'Housing Allowance', category: 'Allowance', amount: 32000 },
+          { ruleId: 'RUL-003', ruleName: 'Transport Allowance', category: 'Allowance', amount: 2000 },
+          { ruleId: 'RUL-005', ruleName: 'Professional Tax', category: 'Deduction', amount: 200 }
+        ]
       }
     ]
   }

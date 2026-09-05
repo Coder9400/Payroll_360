@@ -30,6 +30,7 @@ import { Contracts } from './pages/Contracts';
 import { ContractDetail } from './pages/ContractDetail';
 import { WorkingSchedules } from './pages/WorkingSchedules';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { MyPayslips } from './pages/MyPayslips';
 
 // Payroll pages
 import { PayrollDashboard } from './pages/payroll/PayrollDashboard';
@@ -41,6 +42,8 @@ import { StructureForm } from './pages/payroll/StructureForm';
 import { StructureDetail } from './pages/payroll/StructureDetail';
 import { RulesList } from './pages/payroll/RulesList';
 import { RuleForm } from './pages/payroll/RuleForm';
+import { PayslipsList } from './pages/payroll/PayslipsList';
+import { PayslipDetail } from './pages/payroll/PayslipDetail';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
 const R = {
@@ -130,7 +133,7 @@ function App() {
               path="my-payslips"
               element={
                 <AuthRoute roles={[R.EMPLOYEE]}>
-                  <PlaceholderPage title="My Payslips" description="View your payslips" phase="Phase 07" />
+                  <MyPayslips />
                 </AuthRoute>
               }
             />
@@ -251,6 +254,22 @@ function App() {
               element={
                 <AuthRoute roles={PAYROLL_ROLES}>
                   <PayrollDashboard />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/payslips"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PayslipsList />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/payslips/:id"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PayslipDetail />
                 </AuthRoute>
               }
             />

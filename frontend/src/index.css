@@ -20,3 +20,40 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 }
+
+@media print {
+  body {
+    background-color: white !important;
+  }
+  
+  /* Hide UI elements that shouldn't be printed */
+  .print-hidden,
+  aside, 
+  nav {
+    display: none !important;
+  }
+  
+  /* Reset layout constraints for printing */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .print-document {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .print-signature-block {
+    display: block !important;
+    break-inside: avoid;
+  }
+
+  .payslip-container {
+    page-break-after: always;
+  }
+}

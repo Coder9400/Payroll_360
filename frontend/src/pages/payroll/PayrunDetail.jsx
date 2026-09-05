@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calculator, CheckCircle, CreditCard, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Calculator, CheckCircle, CreditCard, AlertCircle, FileText } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { payrollService } from '../../services/payrollService';
+import { payslipService } from '../../services/payslipService';
 import { ValidationSummaryModal } from '../../components/payroll/ValidationSummaryModal';
 import { cn } from '../../utils/cn';
 
@@ -65,6 +66,19 @@ export function PayrunDetail() {
     setError('');
     try {
       await payrollService.validatePayrun(id);
+      await loadPayrun();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleGeneratePayslips = async () => {
+    setProcessing(true);
+    setError('');
+    try {
+      await payslipService.generatePayslips(id);
       await loadPayrun();
     } catch (err) {
       setError(err.message);
@@ -152,6 +166,17 @@ export function PayrunDetail() {
             </button>
           )}
 
+          {payrun.status === 'Validated' && !payrun.payslipsGenerated && (
+            <button
+              onClick={handleGeneratePayslips}
+              disabled={processing}
+              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              <FileText className="-ml-1 mr-2 h-4 w-4" />
+              Generate Payslips
+            </button>
+          )}
+
           {payrun.status === 'Validated' && (
             <button
               onClick={handleMarkPaid}
@@ -161,6 +186,15 @@ export function PayrunDetail() {
               <CreditCard className="-ml-1 mr-2 h-4 w-4" />
               Mark as Paid
             </button>
+          )}
+
+          {payrun.payslipsGenerated && (
+            <Link
+              to="/payroll/payslips"
+              className="inline-flex items-center justify-center rounded-md bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              View All Payslips
+            </Link>
           )}
         </div>
       </div>
@@ -239,10 +273,16 @@ export function PayrunDetail() {
                         ps.status === 'Computed' && "bg-blue-100 text-blue-800",
                         ps.status === 'Error' && "bg-red-100 text-red-800",
                         ps.status === 'Validated' && "bg-green-100 text-green-800",
+                        ps.status === 'Generated' && "bg-blue-100 text-blue-800",
                         ps.status === 'Paid' && "bg-purple-100 text-purple-800",
                       )}>
                         {ps.status}
                       </span>
+                      {ps.status === 'Generated' && (
+                        <Link to={`/payroll/payslips/${ps.id}`} className="ml-3 text-xs text-primary-600 hover:text-primary-800 font-medium">
+                          View PDF
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
