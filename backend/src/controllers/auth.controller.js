@@ -1,5 +1,6 @@
 const authService = require('../services/auth.service');
 const roleRepository = require('../repositories/role.repository');
+const { supabase, supabaseAdmin, isConfigured } = require('../config/supabase');
 const { sendSuccess } = require('../utils/apiResponse');
 
 /**
@@ -58,16 +59,50 @@ const login = async (req, res, next) => {
 };
 
 /**
+ * Logout — invalidate Supabase session
+ */
+const logout = async (req, res, next) => {
+  try {
+    // Extract token from Authorization header if present
+    const authHeader = req.headers.authorization;
+    if (authHeader && isConfigured && supabase) {
+      const token = authHeader.replace('Bearer ', '').trim();
+      // Best-effort signout — ignore errors
+      await supabase.auth.admin?.signOut(token).catch(() => {});
+    }
+    return sendSuccess(res, { message: 'Logged out successfully', statusCode: 200 });
+  } catch (error) {
+    // Always return success on logout
+    return sendSuccess(res, { message: 'Logged out successfully', statusCode: 200 });
+  }
+};
+
+/**
  * Get current authenticated user profile, roles, and permissions
+ * Also resolves linked employee record if available.
  */
 const getMe = async (req, res, next) => {
   try {
+    let employee = null;
+
+    // Attempt to resolve linked employee record via user_id
+    if (isConfigured && (supabaseAdmin || supabase)) {
+      const client = supabaseAdmin || supabase;
+      const { data: empData } = await client
+        .from('employees')
+        .select('id, employee_code, first_name, last_name, employment_status, department_id')
+        .eq('user_id', req.user.id)
+        .maybeSingle();
+      if (empData) employee = empData;
+    }
+
     const userData = {
-      id: req.user.id,
-      email: req.user.email,
-      profile: req.user.profile,
-      roles: req.user.roles,
+      id:          req.user.id,
+      email:       req.user.email,
+      profile:     req.user.profile,
+      roles:       req.user.roles,
       permissions: req.user.permissions,
+      employee,
     };
 
     return sendSuccess(res, {
@@ -120,6 +155,7 @@ const assignRole = async (req, res, next) => {
 module.exports = {
   signup,
   login,
+  logout,
   getMe,
   getRoles,
   assignRole,
