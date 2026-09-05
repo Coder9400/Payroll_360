@@ -1,0 +1,32 @@
+{
+  "name": "peoplepay360-backend",
+  "version": "1.0.0",
+  "description": "PeoplePay360 HR & Payroll Backend API Service",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node tests/rbac.test.js"
+  },
+  "keywords": [
+    "peoplepay360",
+    "hr",
+    "payroll",
+    "express",
+    "supabase"
+  ],
+  "author": "PeoplePay360 Team",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
