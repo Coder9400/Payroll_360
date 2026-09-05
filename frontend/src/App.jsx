@@ -45,6 +45,13 @@ import { RuleForm } from './pages/payroll/RuleForm';
 import { PayslipsList } from './pages/payroll/PayslipsList';
 import { PayslipDetail } from './pages/payroll/PayslipDetail';
 
+// Reports pages
+import { ReportsHub } from './pages/reports/ReportsHub';
+import { EmployeeReport } from './pages/reports/EmployeeReport';
+import { AttendanceReport } from './pages/reports/AttendanceReport';
+import { TimeOffReport } from './pages/reports/TimeOffReport';
+import { PayrollReport } from './pages/reports/PayrollReport';
+
 // ─── Role constants ────────────────────────────────────────────────────────────
 const R = {
   EMPLOYEE: 'Employee',
@@ -355,14 +362,13 @@ function App() {
             />
 
             {/* ── Reports ──────────────────────────────────────────── */}
-            <Route
-              path="reports"
-              element={
-                <AuthRoute roles={HR_AND_ABOVE}>
-                  <PlaceholderPage title="Reports" description="View analytics and payroll reports" phase="Phase 09" />
-                </AuthRoute>
-              }
-            />
+            <Route path="reports">
+              <Route index element={<AuthRoute roles={HR_AND_ABOVE}><ReportsHub /></AuthRoute>} />
+              <Route path="employees" element={<AuthRoute roles={HR_AND_ABOVE}><EmployeeReport /></AuthRoute>} />
+              <Route path="attendance" element={<AuthRoute roles={HR_AND_ABOVE}><AttendanceReport /></AuthRoute>} />
+              <Route path="time-off" element={<AuthRoute roles={HR_AND_ABOVE}><TimeOffReport /></AuthRoute>} />
+              <Route path="payroll" element={<AuthRoute roles={HR_AND_ABOVE}><PayrollReport /></AuthRoute>} />
+            </Route>
 
             {/* 404 within app → dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
