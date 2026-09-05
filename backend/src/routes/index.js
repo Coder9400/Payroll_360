@@ -11,6 +11,7 @@ const employeeRoutes = require('./employee.routes');
 const scheduleRoutes = require('./schedule.routes');
 const contractRoutes = require('./contract.routes');
 const timeOffTypeRoutes = require('./timeOffType.routes');
+const userRoutes = require('./user.routes');
 
 // Operational HR Routes (Phase 2)
 const attendanceRoutes = require('./attendance.routes');
@@ -36,6 +37,9 @@ router.use('/employees', employeeRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/contracts', contractRoutes);
 router.use('/time-off-types', timeOffTypeRoutes);
+
+// User Provisioning Routes (Admin)
+router.use('/users', userRoutes);
 
 // Phase 2: Operational HR Modules
 router.use('/attendance', attendanceRoutes);

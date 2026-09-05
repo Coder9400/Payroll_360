@@ -104,13 +104,10 @@ exports.getAttendance = async (req, res, next) => {
 
     // Employees can only see their own records
     if (!isHR) {
-      // Resolve employee_id from user
-      try {
-        const employee = await attendanceService.getEmployeeByUserId(userId);
-        filters.employee_id = employee.id;
-      } catch (err) {
+      if (!req.user.employee) {
         return res.status(200).json({ success: true, data: [], total: 0, page: 1, limit: 20, totalPages: 0 });
       }
+      filters.employee_id = req.user.employee.id;
     }
 
     const result = await attendanceService.getAttendance(filters);
@@ -136,8 +133,7 @@ exports.getAttendanceById = async (req, res, next) => {
 
     if (!isHR) {
       // Employee: can only view own record
-      const employee = await attendanceService.getEmployeeByUserId(userId);
-      if (record.employee_id !== employee.id) {
+      if (!req.user.employee || record.employee_id !== req.user.employee.id) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }
@@ -181,8 +177,7 @@ exports.getEmployeeAttendance = async (req, res, next) => {
 
     if (!isHR) {
       // Verify caller owns this employee record
-      const myEmployee = await attendanceService.getEmployeeByUserId(userId);
-      if (myEmployee.id !== targetEmployeeId) {
+      if (!req.user.employee || req.user.employee.id !== targetEmployeeId) {
         return next(new AppError('Access denied', 403, 'FORBIDDEN'));
       }
     }

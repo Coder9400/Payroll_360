@@ -135,6 +135,22 @@ export const employeeService = {
   },
 
   /**
+   * Provision Employee Login Account
+   */
+  async provisionAccount(id) {
+    const response = await api.post(`/employees/${id}/provision-account`);
+    return unwrap(response);
+  },
+
+  /**
+   * Disable Employee Login Account
+   */
+  async disableAccount(id) {
+    const response = await api.post(`/employees/${id}/disable-account`);
+    return unwrap(response);
+  },
+
+  /**
    * Get reference data for dropdowns
    */
   async getReferenceData() {
