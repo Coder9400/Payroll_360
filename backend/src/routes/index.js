@@ -5,6 +5,9 @@ const authRoutes = require('./auth.routes');
 const departmentRoutes = require('./department.routes');
 const positionRoutes = require('./position.routes');
 const employeeRoutes = require('./employee.routes');
+const contractRoutes = require('./contract.routes');
+const scheduleRoutes = require('./schedule.routes');
+const attendanceRoutes = require('./attendance.routes');
 const testRbacRoutes = require('./testRbac.routes');
 
 const router = Router();
@@ -20,18 +23,16 @@ router.use('/departments', departmentRoutes);
 router.use('/positions', positionRoutes);
 router.use('/employees', employeeRoutes);
 
+// Phase 4: Contracts & Working Schedules
+router.use('/contracts', contractRoutes);
+router.use('/schedules', scheduleRoutes);
+
+// Phase 5: Attendance, Regularization & Overtime
+router.use('/attendance', attendanceRoutes);
+
 // RBAC & Permission Verification routes (Enabled in non-production environments only)
 if (!config.isProduction && process.env.NODE_ENV !== 'production') {
   router.use('/test', testRbacRoutes);
 }
-
-// Future HR & Payroll Business modules will be registered here cleanly:
-// router.use('/attendance', attendanceRoutes);
-// router.use('/leaves', leaveRoutes);
-// router.use('/contracts', contractRoutes);
-// router.use('/payroll', payrollRoutes);
-// router.use('/payslips', payslipRoutes);
-// router.use('/salary-structures', salaryStructureRoutes);
-// router.use('/salary-rules', salaryRuleRoutes);
 
 module.exports = router;

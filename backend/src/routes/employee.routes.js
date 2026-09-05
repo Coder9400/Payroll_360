@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 /**
  * Employee Routes
  *
@@ -7,20 +6,15 @@
  * POST   /api/employees              - Create employee
  * PUT    /api/employees/:id          - Full employee update
  * PATCH  /api/employees/:id/status   - Update employment status only
+ *
+ * Sub-routes:
+ * GET    /api/employees/:id/contracts            - Contract history
+ * GET    /api/employees/:id/applicable-contract  - Applicable contract for payroll
+ * GET    /api/employees/:id/schedule             - Active working schedule
+ * GET    /api/employees/:id/attendance           - Employee attendance history
  */
 
 const { Router } = require('express');
-=======
-const express = require('express');
-const router = express.Router();
-const validate = require('../middleware/validate.middleware');
-const { createEmployeeSchema, updateEmployeeSchema } = require('../validators/hr.validator');
-const employeeController = require('../controllers/employee.controller');
-const attendanceController = require('../controllers/attendance.controller');
-const timeOffController = require('../controllers/timeOff.controller');
-const contractController = require('../controllers/contract.controller');
-const scheduleController = require('../controllers/schedule.controller');
->>>>>>> Stashed changes
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePermission, requireAnyPermission } = require('../middleware/rbac.middleware');
 const { PERMISSIONS } = require('../config/rbacConstants');
@@ -31,32 +25,27 @@ const {
   updateEmployee,
   patchEmployeeStatus,
 } = require('../controllers/employee.controller');
+const contractController = require('../controllers/contract.controller');
+const scheduleController = require('../controllers/schedule.controller');
+const attendanceController = require('../controllers/attendance.controller');
 
 const router = Router();
 
 router.use(requireAuth());
 
-<<<<<<< Updated upstream
 /**
  * @route   GET /api/employees
  * @desc    List employees. Query: ?departmentId=&positionId=&status=&includeInactive=
  * @access  employee:read
  */
 router.get('/', requirePermission(PERMISSIONS.EMPLOYEE_READ), listEmployees);
-=======
-// Phase 1: Employee CRUD
-router.post('/', requirePermission(PERMISSIONS.EMPLOYEE_CREATE), validate(createEmployeeSchema), employeeController.createEmployee);
-router.get('/', requirePermission(PERMISSIONS.EMPLOYEE_READ), employeeController.getEmployees);
-router.get('/:id', requireAnyPermission(PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_READ_OWN), employeeController.getEmployeeById);
-router.put('/:id', requirePermission(PERMISSIONS.EMPLOYEE_UPDATE), validate(updateEmployeeSchema), employeeController.updateEmployee);
->>>>>>> Stashed changes
 
 /**
  * @route   GET /api/employees/:id
  * @desc    Get a single employee by ID
- * @access  employee:read
+ * @access  employee:read, employee:read_own
  */
-router.get('/:id', requirePermission(PERMISSIONS.EMPLOYEE_READ), getEmployee);
+router.get('/:id', requireAnyPermission(PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_READ_OWN), getEmployee);
 
 /**
  * @route   POST /api/employees
@@ -84,5 +73,7 @@ router.get('/:id/contracts', requireAnyPermission(PERMISSIONS.CONTRACT_READ, PER
 router.get('/:id/applicable-contract', requireAnyPermission(PERMISSIONS.CONTRACT_READ, PERMISSIONS.CONTRACT_READ_OWN, 'read:contracts'), contractController.getApplicableContract);
 router.get('/:id/schedule', requireAnyPermission(PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_READ_OWN, 'read:hr_master'), scheduleController.getEmployeeSchedule);
 
-module.exports = router;
+// Phase 5: Employee Attendance sub-route
+router.get('/:id/attendance', requireAnyPermission(PERMISSIONS.ATTENDANCE_READ, PERMISSIONS.ATTENDANCE_READ_OWN, 'attendance:read'), attendanceController.getEmployeeAttendance);
 
+module.exports = router;

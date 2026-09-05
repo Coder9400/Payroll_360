@@ -7,16 +7,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-<<<<<<< Updated upstream
-    "test": "node tests/rbac.test.js"
-=======
     "test": "node tests/run-all-tests.js",
     "test:rbac": "node tests/rbac.test.js",
-    "test:hr": "node tests/hrMasterData.test.js",
-    "test:attendance": "node tests/attendance.test.js",
-    "test:timeoff": "node tests/timeOff.test.js",
-    "test:contracts": "node tests/contractsSchedules.test.js"
->>>>>>> Stashed changes
+    "test:contracts": "node tests/contractsSchedules.test.js",
+    "test:attendance": "node tests/attendancePhase5.test.js"
   },
   "keywords": [
     "peoplepay360",
@@ -33,7 +27,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

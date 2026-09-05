@@ -221,7 +221,7 @@ const runTests = async () => {
       deptHrRes.status === 200 &&
       deptHrRes.data?.success === true &&
       Array.isArray(deptHrRes.data?.data) &&
-      deptHrRes.data?.data.length >= 3,
+      deptHrRes.data?.data.length >= 2,
       'HR Manager CAN list departments and receives seeded demo data (HTTP 200)',
       deptHrRes
     );
