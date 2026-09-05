@@ -1,30 +1,223 @@
-import * as React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { MainLayout } from "./layouts/MainLayout";
-import { Dashboard } from "./pages/Dashboard";
-import { Employees } from "./pages/Employees";
-import { Attendance } from "./pages/Attendance";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import * as React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+// Auth
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './routes/ProtectedRoute';
+import { RoleGuard } from './routes/RoleGuard';
+
+// Layout
+import { MainLayout } from './layouts/MainLayout';
+
+// Public pages
+import { Login } from './pages/Login';
+import { AccessDenied } from './pages/AccessDenied';
+
+// App pages
+import { Dashboard } from './pages/Dashboard';
+import { Employees } from './pages/Employees';
+import { Attendance } from './pages/Attendance';
+import { PlaceholderPage } from './pages/PlaceholderPage';
+
+// ─── Role constants ────────────────────────────────────────────────────────────
+const R = {
+  EMPLOYEE: 'Employee',
+  HR_MANAGER: 'HR Manager',
+  HR_PAYROLL_USER: 'HR Payroll User',
+  HR_PAYROLL_MANAGER: 'HR Payroll Manager',
+  ADMIN: 'Admin',
+};
+const ALL = Object.values(R);
+const HR_AND_ABOVE = [R.HR_MANAGER, R.HR_PAYROLL_USER, R.HR_PAYROLL_MANAGER, R.ADMIN];
+const PAYROLL_ROLES = [R.HR_PAYROLL_USER, R.HR_PAYROLL_MANAGER, R.ADMIN];
+const PAYROLL_MGR = [R.HR_PAYROLL_MANAGER, R.ADMIN];
+const HR_MGR_ROLES = [R.HR_MANAGER, R.HR_PAYROLL_MANAGER, R.ADMIN];
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Convenience wrapper — ProtectedRoute + RoleGuard in one.
+ * IMPORTANT: Frontend authorization is for UX/navigation only.
+ * The backend MUST enforce actual authorization on every API endpoint.
+ */
+function AuthRoute({ roles, children }) {
+  return (
+    <ProtectedRoute>
+      <RoleGuard allowedRoles={roles}>{children}</RoleGuard>
+    </ProtectedRoute>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="employees" element={<Employees />} />
-          <Route path="attendance" element={<Attendance />} />
-          <Route path="time-off" element={<PlaceholderPage title="Time Off" description="Manage leaves and absences" />} />
-          <Route path="contracts" element={<PlaceholderPage title="Contracts" description="Manage employee contracts" />} />
-          <Route path="payroll" element={<PlaceholderPage title="Payroll" description="Process payroll and salaries" />} />
-          <Route path="payslips" element={<PlaceholderPage title="Payslips" description="View and generate payslips" />} />
-          <Route path="salary-structures" element={<PlaceholderPage title="Salary Structures" description="Configure salary structures" />} />
-          <Route path="salary-rules" element={<PlaceholderPage title="Salary Rules" description="Configure computation rules" />} />
-          <Route path="reports" element={<PlaceholderPage title="Reports" description="View analytics and reports" />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          {/* ── Public routes ──────────────────────────────────────────── */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/access-denied" element={<AccessDenied />} />
+
+          {/* ── Protected app shell ────────────────────────────────────── */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* Root → Dashboard */}
+            <Route index element={<Navigate to="/dashboard" replace />} />
+
+            {/* Dashboard — all authenticated roles */}
+            <Route
+              path="dashboard"
+              element={
+                <AuthRoute roles={ALL}>
+                  <Dashboard />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Employee self-service ─────────────────────────────── */}
+            <Route
+              path="my-profile"
+              element={
+                <AuthRoute roles={[R.EMPLOYEE]}>
+                  <PlaceholderPage title="My Profile" description="View and update your personal information" phase="Phase 03" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="my-attendance"
+              element={
+                <AuthRoute roles={[R.EMPLOYEE]}>
+                  <PlaceholderPage title="My Attendance" description="View your attendance records" phase="Phase 03" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="my-time-off"
+              element={
+                <AuthRoute roles={[R.EMPLOYEE]}>
+                  <PlaceholderPage title="My Time Off" description="View and request time off" phase="Phase 04" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="my-payslips"
+              element={
+                <AuthRoute roles={[R.EMPLOYEE]}>
+                  <PlaceholderPage title="My Payslips" description="View your payslips" phase="Phase 07" />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── People ────────────────────────────────────────────── */}
+            <Route
+              path="employees"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <Employees />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="contracts"
+              element={
+                <AuthRoute roles={HR_MGR_ROLES}>
+                  <PlaceholderPage title="Contracts" description="Manage employee contracts" phase="Phase 03" />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Attendance (HR+ only) ─────────────────────────────── */}
+            <Route
+              path="attendance"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <Attendance />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Time Off ─────────────────────────────────────────── */}
+            <Route
+              path="time-off"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <PlaceholderPage title="Time Off" description="Manage time off types and policies" phase="Phase 04" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="time-off/requests"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <PlaceholderPage title="Time Off Requests" description="Review and approve leave requests" phase="Phase 04" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="time-off/allocations"
+              element={
+                <AuthRoute roles={HR_MGR_ROLES}>
+                  <PlaceholderPage title="Time Off Allocations" description="Manage leave allocations" phase="Phase 04" />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Payroll ──────────────────────────────────────────── */}
+            <Route
+              path="payroll"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PlaceholderPage title="Payruns" description="Process and manage payroll runs" phase="Phase 05" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payslips"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PlaceholderPage title="Payslips" description="View and generate employee payslips" phase="Phase 07" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="salary-structures"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <PlaceholderPage title="Salary Structures" description="Configure salary structures" phase="Phase 05" />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="salary-rules"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <PlaceholderPage title="Salary Rules" description="Configure payroll computation rules" phase="Phase 05" />
+                </AuthRoute>
+              }
+            />
+
+            {/* ── Reports ──────────────────────────────────────────── */}
+            <Route
+              path="reports"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <PlaceholderPage title="Reports" description="View analytics and payroll reports" phase="Phase 09" />
+                </AuthRoute>
+              }
+            />
+
+            {/* 404 within app → dashboard */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+
+          {/* Catch-all → login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
