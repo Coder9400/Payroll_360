@@ -3,21 +3,28 @@ const roleRepository = require('../repositories/role.repository');
 const { sendSuccess } = require('../utils/apiResponse');
 
 /**
- * Register a new user
+ * Register a new user (Public endpoint: strictly assigns employee role)
  */
 const signup = async (req, res, next) => {
   try {
-    const { email, password, firstName, lastName, role } = req.body;
+    // Explicitly destructure only allowed fields - ignore any client-supplied role or permissions
+    const { email, password, firstName, lastName } = req.body;
+    
     const result = await authService.register({
       email,
       password,
       firstName,
       lastName,
-      role,
     });
 
     return sendSuccess(res, {
-      data: result,
+      data: {
+        user: result.user,
+        profile: result.profile,
+        roles: result.roles,
+        permissions: result.permissions,
+        session: result.session,
+      },
       message: 'User registered successfully',
       statusCode: 201,
     });
@@ -35,7 +42,13 @@ const login = async (req, res, next) => {
     const result = await authService.login({ email, password });
 
     return sendSuccess(res, {
-      data: result,
+      data: {
+        user: result.user,
+        profile: result.profile,
+        roles: result.roles,
+        permissions: result.permissions,
+        session: result.session,
+      },
       message: 'Login successful',
       statusCode: 200,
     });
@@ -45,7 +58,7 @@ const login = async (req, res, next) => {
 };
 
 /**
- * Get current authenticated user profile and permissions
+ * Get current authenticated user profile, roles, and permissions
  */
 const getMe = async (req, res, next) => {
   try {
@@ -68,7 +81,7 @@ const getMe = async (req, res, next) => {
 };
 
 /**
- * Get available roles in system
+ * Get available system roles
  */
 const getRoles = async (req, res, next) => {
   try {
@@ -83,9 +96,31 @@ const getRoles = async (req, res, next) => {
   }
 };
 
+/**
+ * Privileged role assignment (Admin only)
+ */
+const assignRole = async (req, res, next) => {
+  try {
+    const { targetUserId, role } = req.body;
+    const result = await authService.assignUserRole({
+      targetUserId,
+      newRole: role,
+    });
+
+    return sendSuccess(res, {
+      data: result,
+      message: `Role ${role} assigned to user successfully`,
+      statusCode: 200,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   signup,
   login,
   getMe,
   getRoles,
+  assignRole,
 };

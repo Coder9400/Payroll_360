@@ -103,6 +103,42 @@ class UserRepository {
   }
 
   /**
+   * Update active status of a user profile
+   * @param {string} userId
+   * @param {boolean} isActive
+   * @returns {Promise<object|null>}
+   */
+  async setUserActiveStatus(userId, isActive) {
+    if (isConfigured && (supabaseAdmin || supabase)) {
+      try {
+        const client = supabaseAdmin || supabase;
+        const { data, error } = await client
+          .from('profiles')
+          .update({ is_active: Boolean(isActive), updated_at: new Date().toISOString() })
+          .eq('id', userId)
+          .select()
+          .single();
+
+        if (!error && data) {
+          mockProfiles.set(userId, data);
+          return data;
+        }
+      } catch (err) {
+        // Fall back to in-memory store
+      }
+    }
+
+    const existing = mockProfiles.get(userId);
+    if (existing) {
+      existing.is_active = Boolean(isActive);
+      existing.updated_at = new Date().toISOString();
+      mockProfiles.set(userId, existing);
+      return existing;
+    }
+    return null;
+  }
+
+  /**
    * Get roles and permissions for a user
    * @param {string} userId
    * @returns {Promise<{ roles: string[], permissions: string[] }>}
@@ -159,11 +195,12 @@ class UserRepository {
   }
 
   /**
-   * Assign role to user
+   * Assign or replace role for user
    * @param {string} userId
    * @param {string} roleSlug
+   * @param {boolean} [replace=false]
    */
-  async assignRole(userId, roleSlug) {
+  async assignRole(userId, roleSlug, replace = false) {
     if (isConfigured && (supabaseAdmin || supabase)) {
       try {
         const client = supabaseAdmin || supabase;
@@ -176,6 +213,9 @@ class UserRepository {
           .single();
 
         if (!roleError && roleData) {
+          if (replace) {
+            await client.from('user_roles').delete().eq('user_id', userId);
+          }
           await client
             .from('user_roles')
             .upsert({ user_id: userId, role_id: roleData.id }, { onConflict: 'user_id,role_id' });
@@ -186,7 +226,9 @@ class UserRepository {
     }
 
     const current = mockUserRoles.get(userId) || [];
-    if (!current.includes(roleSlug)) {
+    if (replace) {
+      mockUserRoles.set(userId, [roleSlug]);
+    } else if (!current.includes(roleSlug)) {
       mockUserRoles.set(userId, [...current, roleSlug]);
     }
   }

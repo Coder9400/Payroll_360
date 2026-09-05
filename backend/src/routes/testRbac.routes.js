@@ -21,6 +21,7 @@ router.get('/authenticated', requireAuth(), (req, res) => {
       userId: req.user.id,
       email: req.user.email,
       roles: req.user.roles,
+      permissions: req.user.permissions,
     },
     message: 'Authenticated resource accessed successfully',
   });
@@ -50,11 +51,11 @@ router.get('/payroll-access', requireAuth(), requirePermission(PERMISSIONS.PAYRO
   });
 });
 
-// Payroll processing (HR Payroll User, HR Payroll Manager, Admin)
-router.get('/payroll-process', requireAuth(), requirePermission(PERMISSIONS.PAYROLL_PROCESS), (req, res) => {
+// Payroll action (POST endpoint)
+router.post('/payroll-action', requireAuth(), requirePermission(PERMISSIONS.PAYROLL_PROCESS), (req, res) => {
   return sendSuccess(res, {
-    data: { module: 'payroll', action: 'process', access: 'granted' },
-    message: 'Payroll calculation run permitted',
+    data: { module: 'payroll', action: 'process', executed: true },
+    message: 'Payroll process executed',
   });
 });
 
@@ -67,6 +68,19 @@ router.get(
     return sendSuccess(res, {
       data: { module: 'salary_structure', action: 'manage', access: 'granted' },
       message: 'Salary structure management permitted',
+    });
+  }
+);
+
+// Salary structure action (POST endpoint)
+router.post(
+  '/salary-structure-action',
+  requireAuth(),
+  requirePermission(PERMISSIONS.SALARY_STRUCTURE_MANAGE),
+  (req, res) => {
+    return sendSuccess(res, {
+      data: { module: 'salary_structure', action: 'created', executed: true },
+      message: 'Salary structure created',
     });
   }
 );
