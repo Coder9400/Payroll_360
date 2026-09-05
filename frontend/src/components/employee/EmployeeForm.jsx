@@ -17,12 +17,13 @@ export function EmployeeForm({
     phone: "",
     dob: "",
     employeeId: "",
-    department: "",
-    position: "",
+    departmentId: "",
+    jobPositionId: "",
     manager: "",
-    employeeType: "Full Time",
+    employeeType: "FULL_TIME",
     joiningDate: "",
-    status: "Active",
+    status: "ACTIVE",
+    workingScheduleId: "",
     workEmail: "",
     workPhone: "",
     ...initialData
@@ -49,8 +50,9 @@ export function EmployeeForm({
       newErrors.email = "Invalid email format";
     }
     if (!formData.employeeId.trim()) newErrors.employeeId = "Employee ID is required";
-    if (!formData.department) newErrors.department = "Department is required";
-    if (!formData.position) newErrors.position = "Job position is required";
+    if (!formData.departmentId) newErrors.departmentId = "Department is required";
+    if (!formData.jobPositionId) newErrors.jobPositionId = "Job position is required";
+    if (!formData.workingScheduleId) newErrors.workingScheduleId = "Working schedule is required";
     if (!formData.joiningDate) newErrors.joiningDate = "Joining date is required";
 
     setErrors(newErrors);
@@ -132,40 +134,54 @@ export function EmployeeForm({
             error={errors.joiningDate}
           />
           <Select 
-            name="department"
-            value={formData.department}
+            name="departmentId"
+            value={formData.departmentId || ""}
             onChange={handleChange}
-            options={(refData?.departments || []).map(d => ({ value: d, label: d }))}
-            error={errors.department}
+            options={refData?.departmentOptions || []}
+            error={errors.departmentId}
+            placeholder="Select Department *"
             className="w-full"
           />
           <Select 
-            name="position"
-            value={formData.position}
+            name="jobPositionId"
+            value={formData.jobPositionId || ""}
             onChange={handleChange}
-            options={(refData?.positions || []).map(p => ({ value: p, label: p }))}
-            error={errors.position}
+            options={refData?.positionOptions || []}
+            error={errors.jobPositionId}
+            placeholder="Select Job Position *"
             className="w-full"
           />
           <Select 
             name="manager"
-            value={formData.manager}
+            value={formData.manager || ""}
             onChange={handleChange}
             options={refData?.managers || []}
+            placeholder="Select Manager"
             className="w-full"
           />
           <Select 
             name="employeeType"
-            value={formData.employeeType}
+            value={formData.employeeType || ""}
             onChange={handleChange}
-            options={(refData?.employeeTypes || []).map(e => ({ value: e, label: e }))}
+            options={refData?.employeeTypes || []}
+            placeholder="Select Employee Type *"
+            className="w-full"
+          />
+          <Select 
+            name="workingScheduleId"
+            value={formData.workingScheduleId || ""}
+            onChange={handleChange}
+            options={refData?.schedules || []}
+            error={errors.workingScheduleId}
+            placeholder="Select Working Schedule *"
             className="w-full"
           />
           <Select 
             name="status"
-            value={formData.status}
+            value={formData.status || ""}
             onChange={handleChange}
-            options={(refData?.statuses || []).map(s => ({ value: s, label: s }))}
+            options={refData?.statuses || []}
+            placeholder="Select Status *"
             className="w-full"
           />
         </div>

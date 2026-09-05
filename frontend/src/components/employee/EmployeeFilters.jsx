@@ -17,28 +17,32 @@ export function EmployeeFilters({ filters, setFilters, refData, onClear }) {
         name="department"
         value={filters.department}
         onChange={handleChange}
-        options={(refData?.departments || []).map(d => ({ value: d, label: d }))}
+        options={refData?.departmentOptions || []}
+        placeholder="Filter by Department"
         className="w-full"
       />
       <Select 
         name="position"
         value={filters.position}
         onChange={handleChange}
-        options={(refData?.positions || []).map(p => ({ value: p, label: p }))}
+        options={refData?.positionOptions || []}
+        placeholder="Filter by Position"
         className="w-full"
       />
       <Select 
         name="status"
         value={filters.status}
         onChange={handleChange}
-        options={(refData?.statuses || []).map(s => ({ value: s, label: s }))}
+        options={refData?.statuses || []}
+        placeholder="Filter by Status"
         className="w-full"
       />
       <Select 
         name="employeeType"
         value={filters.employeeType}
         onChange={handleChange}
-        options={(refData?.employeeTypes || []).map(e => ({ value: e, label: e }))}
+        options={refData?.employeeTypes || []}
+        placeholder="Filter by Type"
         className="w-full"
       />
       <Select 
@@ -46,6 +50,7 @@ export function EmployeeFilters({ filters, setFilters, refData, onClear }) {
         value={filters.manager}
         onChange={handleChange}
         options={refData?.managers || []}
+        placeholder="Filter by Manager"
         className="w-full"
       />
 

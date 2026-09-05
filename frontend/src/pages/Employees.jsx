@@ -10,8 +10,8 @@ import { employeeService } from "../services/employeeService";
 import { Search } from "lucide-react";
 
 const useToast = () => {
-  const toast = React.useCallback(({ title, description }) => {
-    console.log('Toast:', title, description);
+  const toast = React.useCallback(({ title, description, type }) => {
+    alert(`${type === 'error' ? '❌ Error' : '✅ Success'}: ${title}\n${description || ''}`);
   }, []);
   return { toast };
 };

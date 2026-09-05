@@ -150,38 +150,50 @@ export const employeeService = {
     return unwrap(response);
   },
 
-  /**
-   * Get reference data for dropdowns
-   */
   async getReferenceData() {
-    const [deptRes, posRes, schedRes] = await Promise.all([
+    const results = await Promise.allSettled([
       api.get('/departments?is_active=true&limit=200'),
       api.get('/job-positions?is_active=true&limit=200'),
       api.get('/schedules?limit=200'),
+      api.get('/employees?employment_status=ACTIVE&limit=500')
     ]);
 
-    const departments = (unwrap(deptRes).departments ?? unwrap(deptRes).data ?? [])
-      .map(d => ({ id: d.id, value: d.id, label: d.name, name: d.name }));
+    const getResData = (res) => res.status === 'fulfilled' ? (unwrap(res.value) || {}) : {};
 
-    const positions = (unwrap(posRes).job_positions ?? unwrap(posRes).data ?? [])
-      .map(p => ({ id: p.id, value: p.id, label: p.name, name: p.name, departmentId: p.department_id }));
+    const deptData = getResData(results[0]);
+    const posData = getResData(results[1]);
+    const schedData = getResData(results[2]);
+    const empData = getResData(results[3]);
 
-    const schedules = (unwrap(schedRes).schedules ?? unwrap(schedRes).data ?? [])
-      .map(s => ({ id: s.id, value: s.id, label: `${s.name} (${s.hours_week}h/wk)`, name: s.name }));
+    const deptArray = Array.isArray(deptData) ? deptData : (deptData.departments ?? deptData.data ?? []);
+    const departments = deptArray.map(d => ({ id: d.id, value: d.id, label: d.name, name: d.name }));
 
-    // Fetch active employees for manager dropdown
-    const empRes = await api.get('/employees?employment_status=ACTIVE&limit=500');
-    const managers = (unwrap(empRes).employees ?? unwrap(empRes).data ?? [])
-      .map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.employee_code})` }));
+    const posArray = Array.isArray(posData) ? posData : (posData.job_positions ?? posData.data ?? []);
+    const positions = posArray.map(p => ({ id: p.id, value: p.id, label: p.name, name: p.name, departmentId: p.department_id }));
+
+    const schedArray = Array.isArray(schedData) ? schedData : (schedData.schedules ?? schedData.data ?? []);
+    const schedules = schedArray.map(s => ({ id: s.id, value: s.id, label: `${s.name} (${s.hours_week}h/wk)`, name: s.name }));
+
+    const empArray = Array.isArray(empData) ? empData : (empData.employees ?? empData.data ?? []);
+    const managers = empArray.map(e => ({ value: e.id, label: `${e.first_name} ${e.last_name} (${e.employee_code})` }));
 
     return {
-      departments:   departments.map(d => d.name),
       departmentOptions: departments,
-      positions:     positions.map(p => p.name),
       positionOptions: positions,
       schedules,
-      employeeTypes: ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'],
-      statuses:      ['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'PROBATION', 'TERMINATED'],
+      employeeTypes: [
+        { value: 'FULL_TIME', label: 'Full Time' },
+        { value: 'PART_TIME', label: 'Part Time' },
+        { value: 'CONTRACT', label: 'Contract' },
+        { value: 'INTERN', label: 'Intern' }
+      ],
+      statuses: [
+        { value: 'ACTIVE', label: 'Active' },
+        { value: 'INACTIVE', label: 'Inactive' },
+        { value: 'ON_LEAVE', label: 'On Leave' },
+        { value: 'PROBATION', label: 'Probation' },
+        { value: 'TERMINATED', label: 'Terminated' }
+      ],
       managers,
     };
   },

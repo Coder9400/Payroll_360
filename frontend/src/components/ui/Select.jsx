@@ -15,7 +15,10 @@ const Select = React.forwardRef(({ className, error, options = [], children, ...
       >
         {children ? children : (
           <>
-            <option value="" disabled>Select an option</option>
+            <option value="" disabled>{props.placeholder || "Select an option"}</option>
+            {options.length === 0 && (
+              <option value="none" disabled>No options available</option>
+            )}
             {options.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}

@@ -31,6 +31,17 @@ import { ContractDetail } from './pages/ContractDetail';
 import { WorkingSchedules } from './pages/WorkingSchedules';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
+// Payroll pages
+import { PayrollDashboard } from './pages/payroll/PayrollDashboard';
+import { PayrunsList } from './pages/payroll/PayrunsList';
+import { PayrunCreate } from './pages/payroll/PayrunCreate';
+import { PayrunDetail } from './pages/payroll/PayrunDetail';
+import { StructuresList } from './pages/payroll/StructuresList';
+import { StructureForm } from './pages/payroll/StructureForm';
+import { StructureDetail } from './pages/payroll/StructureDetail';
+import { RulesList } from './pages/payroll/RulesList';
+import { RuleForm } from './pages/payroll/RuleForm';
+
 // ─── Role constants ────────────────────────────────────────────────────────────
 const R = {
   EMPLOYEE: 'Employee',
@@ -239,31 +250,87 @@ function App() {
               path="payroll"
               element={
                 <AuthRoute roles={PAYROLL_ROLES}>
-                  <PlaceholderPage title="Payruns" description="Process and manage payroll runs" phase="Phase 05" />
+                  <PayrollDashboard />
                 </AuthRoute>
               }
             />
             <Route
-              path="payslips"
+              path="payroll/payruns"
               element={
                 <AuthRoute roles={PAYROLL_ROLES}>
-                  <PlaceholderPage title="Payslips" description="View and generate employee payslips" phase="Phase 07" />
+                  <PayrunsList />
                 </AuthRoute>
               }
             />
             <Route
-              path="salary-structures"
+              path="payroll/payruns/new"
               element={
-                <AuthRoute roles={PAYROLL_MGR}>
-                  <PlaceholderPage title="Salary Structures" description="Configure salary structures" phase="Phase 05" />
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PayrunCreate />
                 </AuthRoute>
               }
             />
             <Route
-              path="salary-rules"
+              path="payroll/payruns/:id"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <PayrunDetail />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/structures"
               element={
                 <AuthRoute roles={PAYROLL_MGR}>
-                  <PlaceholderPage title="Salary Rules" description="Configure payroll computation rules" phase="Phase 05" />
+                  <StructuresList />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/structures/new"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <StructureForm />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/structures/:id"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <StructureDetail />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/structures/:id/edit"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <StructureForm />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/rules"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <RulesList />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/rules/new"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <RuleForm />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="payroll/rules/:id/edit"
+              element={
+                <AuthRoute roles={PAYROLL_MGR}>
+                  <RuleForm />
                 </AuthRoute>
               }
             />
