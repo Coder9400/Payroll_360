@@ -4,12 +4,13 @@ const validate = require('../middleware/validate.middleware');
 const { createTimeOffTypeSchema, updateTimeOffTypeSchema } = require('../validators/hr.validator');
 const timeOffTypeController = require('../controllers/timeOffType.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { requirePermission } = require('../middleware/rbac.middleware');
+const { requireRole } = require('../middleware/rbac.middleware');
+const { ROLES } = require('../config/rbacConstants');
 
 router.use(requireAuth());
 
-router.post('/', requirePermission('create:hr_master'), validate(createTimeOffTypeSchema), timeOffTypeController.createTimeOffType);
-router.get('/', requirePermission('read:hr_master'), timeOffTypeController.getTimeOffTypes);
-router.get('/:id', requirePermission('read:hr_master'), timeOffTypeController.getTimeOffTypeById);
+router.post('/', requireRole(ROLES.ADMIN, ROLES.HR_MANAGER), validate(createTimeOffTypeSchema), timeOffTypeController.createTimeOffType);
+router.get('/', timeOffTypeController.getTimeOffTypes);
+router.get('/:id', timeOffTypeController.getTimeOffTypeById);
 
 module.exports = router;

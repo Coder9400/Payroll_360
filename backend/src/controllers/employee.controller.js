@@ -11,7 +11,7 @@ exports.createEmployee = async (req, res, next) => {
     const { data, error } = await db
       .from('employees')
       .insert([req.body])
-      .select('*, departments(name), job_positions(name)')
+      .select('*, departments!employees_department_id_fkey(name), job_positions(name)')
       .single();
 
     if (error) {
@@ -38,7 +38,7 @@ exports.getEmployees = async (req, res, next) => {
 
     let query = db
       .from('employees')
-      .select('*, departments(name), job_positions(name), working_schedules(name)', { count: 'exact' });
+      .select('*, departments!employees_department_id_fkey(name), job_positions(name), working_schedules(name)', { count: 'exact' });
 
     // --- DATA ISOLATION ---
     // If the user does not have full read access (only read_own), restrict the query to their own ID.
@@ -83,7 +83,7 @@ exports.getEmployeeById = async (req, res, next) => {
 
     const { data, error } = await db
       .from('employees')
-      .select('*, departments(*), job_positions(*), working_schedules(*), manager:manager_id(id, first_name, last_name)')
+      .select('*, departments!employees_department_id_fkey(*), job_positions(*), working_schedules(*), manager:manager_id(id, first_name, last_name)')
       .eq('id', req.params.id)
       .single();
 

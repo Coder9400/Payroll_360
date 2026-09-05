@@ -1,6 +1,6 @@
 /**
- * Phase 2 Test Runner
- * Runs all Phase 2 test suites sequentially.
+ * Full Test Suite Runner
+ * Runs all Phase 1 + Phase 2 + Phase 4+5 test suites sequentially.
  */
 
 process.env.NODE_ENV = 'test';
@@ -9,10 +9,11 @@ const { execSync } = require('child_process');
 const path = require('path');
 
 const tests = [
-  { name: 'Phase 1 RBAC Tests', file: 'tests/rbac.test.js' },
-  { name: 'Phase 1 HR Master Data Tests', file: 'tests/hrMasterData.test.js' },
-  { name: 'Phase 2 Attendance Tests', file: 'tests/attendance.test.js' },
-  { name: 'Phase 2 Time Off Tests', file: 'tests/timeOff.test.js' },
+  { name: 'Phase 1 RBAC Tests',            file: 'tests/rbac.test.js' },
+  { name: 'Phase 1 HR Master Data Tests',   file: 'tests/hrMasterData.test.js' },
+  { name: 'Phase 2 Attendance Tests',       file: 'tests/attendance.test.js' },
+  { name: 'Phase 2 Time Off Tests',         file: 'tests/timeOff.test.js' },
+  { name: 'Phase 4+5 Payroll Tests',        file: 'tests/payroll.test.js' },
 ];
 
 let totalPassed = 0;
@@ -20,7 +21,7 @@ let totalFailed = 0;
 const failedSuites = [];
 
 console.log('\n================================================================================');
-console.log(' PeoplePay360 — Full Test Suite Runner (Phase 1 + Phase 2)                    ');
+console.log(' PeoplePay360 — Full Test Suite Runner (Phase 1 + Phase 2 + Phase 4+5)        ');
 console.log('================================================================================\n');
 
 for (const test of tests) {

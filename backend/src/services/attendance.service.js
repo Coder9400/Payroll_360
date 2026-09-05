@@ -462,7 +462,7 @@ async function getAttendance(filters = {}) {
   let query = db
     .from('attendance')
     .select(
-      '*, employees!inner(id, first_name, last_name, employee_code, department_id, departments(name))',
+      '*, employees!inner(id, first_name, last_name, employee_code, department_id)',
       { count: 'exact' }
     );
 

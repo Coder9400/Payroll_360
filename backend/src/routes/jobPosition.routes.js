@@ -4,14 +4,15 @@ const validate = require('../middleware/validate.middleware');
 const { createJobPositionSchema, updateJobPositionSchema } = require('../validators/hr.validator');
 const jobPositionController = require('../controllers/jobPosition.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { requirePermission } = require('../middleware/rbac.middleware');
+const { requireRole } = require('../middleware/rbac.middleware');
+const { ROLES } = require('../config/rbacConstants');
 
 router.use(requireAuth());
 
-router.post('/', requirePermission('create:hr_master'), validate(createJobPositionSchema), jobPositionController.createJobPosition);
-router.get('/', requirePermission('read:hr_master'), jobPositionController.getJobPositions);
-router.get('/:id', requirePermission('read:hr_master'), jobPositionController.getJobPositionById);
-router.put('/:id', requirePermission('update:hr_master'), validate(updateJobPositionSchema), jobPositionController.updateJobPosition);
-router.delete('/:id', requirePermission('delete:hr_master'), jobPositionController.deleteJobPosition);
+router.post('/', requireRole(ROLES.ADMIN, ROLES.HR_MANAGER), validate(createJobPositionSchema), jobPositionController.createJobPosition);
+router.get('/', jobPositionController.getJobPositions);
+router.get('/:id', jobPositionController.getJobPositionById);
+router.put('/:id', requireRole(ROLES.ADMIN, ROLES.HR_MANAGER), validate(updateJobPositionSchema), jobPositionController.updateJobPosition);
+router.delete('/:id', requireRole(ROLES.ADMIN, ROLES.HR_MANAGER), jobPositionController.deleteJobPosition);
 
 module.exports = router;

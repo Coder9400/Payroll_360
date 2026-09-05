@@ -6,10 +6,12 @@ import { LeaveRequestForm } from '../components/timeOff/LeaveRequestForm';
 import { timeOffService } from '../services/timeOffService';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { useAuth } from '../context/AuthContext';
 import { Plus } from 'lucide-react';
 
 export function MyTimeOff() {
-  const employeeId = 'EMP-001'; // Mock current user
+  const { currentUser } = useAuth();
+  const employeeId = currentUser?.employee?.id ?? null;
 
   const [balances, setBalances] = React.useState([]);
   const [requests, setRequests] = React.useState([]);
@@ -18,13 +20,24 @@ export function MyTimeOff() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const fetchData = React.useCallback(async () => {
+    if (!employeeId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
       const [userBalances, userRequests] = await Promise.all([
         timeOffService.getEmployeeLeaveBalance(employeeId),
         timeOffService.getLeaveRequests({ employeeId })
       ]);
-      setBalances(userBalances);
+
+      // Pending amount isn't tracked on the allocation row itself — derive it by
+      // summing this employee's own Pending requests per leave type.
+      const pendingByType = userRequests
+        .filter(r => r.status === 'Pending')
+        .reduce((acc, r) => {
+          acc[r.leaveTypeId] = (acc[r.leaveTypeId] ?? 0) + r.duration;
+          return acc;
+        }, {});
+
+      setBalances(userBalances.map(b => ({ ...b, pending: pendingByType[b.leaveTypeId] ?? 0 })));
       setRequests(userRequests);
     } catch (error) {
       console.error("Failed to load time off data", error);

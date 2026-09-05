@@ -4,6 +4,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { AttendanceTable } from '../components/attendance/AttendanceTable';
 import { RegularizationForm } from '../components/attendance/RegularizationForm';
 import { attendanceService } from '../services/attendanceService';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -13,11 +14,12 @@ import { CalendarCheck, CalendarX, Briefcase, Clock, AlertCircle } from 'lucide-
 export function EmployeeAttendance() {
   const { employeeId } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const isMyAttendance = !employeeId; // If no param, assume it's /my-attendance
   
-  // In reality, get the current logged in user's ID if isMyAttendance
-  // For mock purposes, hardcode an ID if not provided.
-  const targetEmployeeId = employeeId || 'EMP-001'; 
+  // Use the URL param if provided (HR viewing a specific employee),
+  // otherwise fall back to the logged-in user's own employee ID.
+  const targetEmployeeId = employeeId || currentUser?.employee?.id || null;
 
   const [data, setData] = React.useState([]);
   const [metrics, setMetrics] = React.useState({
@@ -34,6 +36,7 @@ export function EmployeeAttendance() {
   const [selectedRecord, setSelectedRecord] = React.useState(null);
 
   const fetchData = React.useCallback(async () => {
+    if (!targetEmployeeId) { setIsLoading(false); return; }
     setIsLoading(true);
     try {
       const result = await attendanceService.getEmployeeAttendance(targetEmployeeId);
@@ -86,7 +89,7 @@ export function EmployeeAttendance() {
     try {
       await attendanceService.createRegularization({
         ...formData,
-        employeeName: "Current User" // In a real app, this comes from auth context
+        employeeName: currentUser?.name ?? 'Employee',
       });
       setIsRegModalOpen(false);
       // alert could be a toast in the future

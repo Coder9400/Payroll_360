@@ -12,10 +12,16 @@ const scheduleRoutes = require('./schedule.routes');
 const contractRoutes = require('./contract.routes');
 const timeOffTypeRoutes = require('./timeOffType.routes');
 const userRoutes = require('./user.routes');
+const dashboardRoutes = require('./dashboard.routes');
 
 // Operational HR Routes (Phase 2)
 const attendanceRoutes = require('./attendance.routes');
 const timeOffRoutes = require('./timeOff.routes');
+
+// Payroll Routes (Phase 4+5)
+const payrollRoutes = require('./payroll.routes');
+const payrunRoutes  = require('./payrun.routes');
+const payslipRoutes = require('./payslip.routes');
 
 const router = Router();
 
@@ -41,13 +47,16 @@ router.use('/time-off-types', timeOffTypeRoutes);
 // User Provisioning Routes (Admin)
 router.use('/users', userRoutes);
 
+// Dashboard Routes
+router.use('/dashboard', dashboardRoutes);
+
 // Phase 2: Operational HR Modules
 router.use('/attendance', attendanceRoutes);
 router.use('/time-off', timeOffRoutes);
 
-// Future Payroll Modules (Phase 3+)
-// router.use('/payroll', payrollRoutes);
-// router.use('/payslips', payslipRoutes);
-// router.use('/salary-structures', salaryStructureRoutes);
+// Phase 4+5: Payroll Modules
+router.use('/payroll', payrollRoutes);
+router.use('/payruns', payrunRoutes);
+router.use('/payslips', payslipRoutes);
 
 module.exports = router;

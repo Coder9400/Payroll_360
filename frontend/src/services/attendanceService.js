@@ -11,17 +11,23 @@ function unwrap(response) {
   return response.data?.data ?? response.data;
 }
 
+// List endpoints return a flat array under `data`; some nest it under a named key instead.
+function unwrapList(payload, key) {
+  return Array.isArray(payload) ? payload : (payload?.[key] ?? payload?.data ?? []);
+}
+
 // Map backend attendance record → frontend format
 function mapRecord(r) {
   if (!r) return null;
-  const empName = r.employee
-    ? `${r.employee.first_name} ${r.employee.last_name}`
+  const emp = r.employees ?? r.employee ?? {};
+  const empName = emp.first_name
+    ? `${emp.first_name} ${emp.last_name}`
     : (r.employee_name ?? '');
   return {
     id:             r.id,
     employeeId:     r.employee_id,
     employeeName:   empName,
-    department:     r.employee?.department?.name ?? '',
+    department:     emp.department?.name ?? '',
     date:           r.attendance_date,
     checkIn:        r.check_in,
     checkOut:       r.check_out,
@@ -71,7 +77,7 @@ export const attendanceService = {
 
     const response = await api.get(`/attendance?${query.toString()}`);
     const payload  = unwrap(response);
-    const records  = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+    const records  = unwrapList(payload, 'attendance').map(mapRecord);
 
     // Build summary metrics from returned data
     const today = new Date().toISOString().split('T')[0];
@@ -101,7 +107,7 @@ export const attendanceService = {
 
     const response = await api.get(`/employees/${employeeId}/attendance?${query.toString()}`);
     const payload  = unwrap(response);
-    const records  = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+    const records  = unwrapList(payload, 'attendance').map(mapRecord);
 
     const presentDays    = records.filter(r => ['Present','Late','Overtime'].includes(r.status)).length;
     const leaveDays      = 0; // Not stored in attendance table
@@ -124,7 +130,7 @@ export const attendanceService = {
         `/employees/${employeeId}/attendance?date_from=${today}&date_to=${today}&limit=1`
       );
       const payload = unwrap(response);
-      const records = (payload.attendance ?? payload.data ?? []).map(mapRecord);
+      const records = unwrapList(payload, 'attendance').map(mapRecord);
       return records[0] ?? null;
     } catch {
       return null;
