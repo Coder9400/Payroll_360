@@ -7,7 +7,16 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+<<<<<<< Updated upstream
     "test": "node tests/rbac.test.js"
+=======
+    "test": "node tests/run-all-tests.js",
+    "test:rbac": "node tests/rbac.test.js",
+    "test:hr": "node tests/hrMasterData.test.js",
+    "test:attendance": "node tests/attendance.test.js",
+    "test:timeoff": "node tests/timeOff.test.js",
+    "test:contracts": "node tests/contractsSchedules.test.js"
+>>>>>>> Stashed changes
   },
   "keywords": [
     "peoplepay360",

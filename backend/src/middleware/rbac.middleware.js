@@ -74,7 +74,46 @@ const requirePermission = (...requiredPermissions) => {
   };
 };
 
+/**
+ * Middleware requiring at least one of the specified permissions to access a route
+ * @param  {...string} requiredPermissions
+ */
+const requireAnyPermission = (...requiredPermissions) => {
+  const permsList = requiredPermissions.flat().map((p) => String(p).trim().toLowerCase());
+
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(new AppError('Authentication required before permission authorization check', 401, 'UNAUTHORIZED'));
+    }
+
+    const userRoles = (req.user.roles || []).map((r) => String(r).trim().toLowerCase());
+    const userPermissions = (req.user.permissions || []).map((p) => String(p).trim().toLowerCase());
+
+    // Admin role or admin:all permission bypasses specific checks
+    if (userRoles.includes(ROLES.ADMIN) || userPermissions.includes(PERMISSIONS.ADMIN_ALL)) {
+      return next();
+    }
+
+    // Check if user has at least one required permission
+    const hasAny = permsList.some((perm) => userPermissions.includes(perm));
+
+    if (!hasAny) {
+      return next(
+        new AppError(
+          `Forbidden: Insufficient permissions. Requires at least one of: [${permsList.join(', ')}]`,
+          403,
+          'FORBIDDEN'
+        )
+      );
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   requireRole,
   requirePermission,
+  requireAnyPermission,
 };
+

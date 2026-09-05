@@ -36,7 +36,16 @@ const sendError = (res, { message = 'An unexpected error occurred', code = 'INTE
   });
 };
 
+/**
+ * Convenience helper: successResponse(res, data, message, statusCode)
+ */
+const successResponse = (res, data = {}, message = 'Success', statusCode = 200) => {
+  return sendSuccess(res, { data, message, statusCode });
+};
+
 module.exports = {
   sendSuccess,
   sendError,
+  successResponse,
 };
+

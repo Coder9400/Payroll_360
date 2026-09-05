@@ -18,7 +18,8 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin) return callback(null, true);
     
-    if (config.cors.origin === '*' || config.cors.origin.includes(origin)) {
+    const origins = Array.isArray(config.cors.origin) ? config.cors.origin : [config.cors.origin];
+    if (!config.isProduction || origins.includes('*') || origins.includes(origin)) {
       return callback(null, true);
     }
     
