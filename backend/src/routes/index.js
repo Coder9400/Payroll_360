@@ -64,6 +64,10 @@ router.use('/payslips', payslipRoutes);
 // Company settings
 router.use('/settings', settingsRoutes);
 
+// Company policies
+const policyRoutes = require('./policy.routes');
+router.use('/policies', policyRoutes);
+
 // AI features
 router.use('/ai', aiRoutes);
 

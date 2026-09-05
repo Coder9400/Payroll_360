@@ -6,53 +6,13 @@
 
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { Users, Building2 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Avatar } from '../components/ui/Avatar';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { EmployeeStatusBadge } from '../components/employee/EmployeeStatusBadge';
 import { employeeService } from '../services/employeeService';
-
-function EmployeeNode({ employee, childrenMap }) {
-  const children = childrenMap.get(employee.id) ?? [];
-  return (
-    <div className="flex flex-col items-center">
-      <Link
-        to={`/employees/${employee.id}`}
-        className="w-56 rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-primary-300 transition-shadow"
-      >
-        <div className="flex items-center gap-3">
-          <Avatar fallback={`${employee.firstName?.[0] ?? ''}${employee.lastName?.[0] ?? ''}`} />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">
-              {employee.firstName} {employee.lastName}
-            </p>
-            <p className="text-xs text-gray-500 truncate">{employee.position}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-gray-400">{employee.department}</span>
-          <EmployeeStatusBadge status={employee.status} />
-        </div>
-      </Link>
-
-      {children.length > 0 && (
-        <>
-          <div className="h-6 w-px bg-gray-300" />
-          <div className="flex flex-wrap justify-center gap-6 pt-0">
-            {children.map((child) => (
-              <div key={child.id} className="flex flex-col items-center">
-                <div className="h-6 w-px bg-gray-300" />
-                <EmployeeNode employee={child} childrenMap={childrenMap} />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 export function Organization() {
   const [employees, setEmployees] = React.useState([]);
@@ -76,25 +36,22 @@ export function Organization() {
     return () => { cancelled = true; };
   }, []);
 
-  const { roots, childrenMap } = React.useMemo(() => {
-    const map = new Map();
-    const rootList = [];
+  const departmentGroups = React.useMemo(() => {
+    const groups = {};
     for (const emp of employees) {
-      if (!emp.manager) {
-        rootList.push(emp);
-        continue;
-      }
-      if (!map.has(emp.manager)) map.set(emp.manager, []);
-      map.get(emp.manager).push(emp);
+      const dept = emp.department || 'Unassigned';
+      if (!groups[dept]) groups[dept] = [];
+      groups[dept].push(emp);
     }
-    return { roots: rootList, childrenMap: map };
+    // Sort departments alphabetically
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [employees]);
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Organization"
-        description="Reporting hierarchy across the company."
+        description="Department breakdown across the company."
       />
 
       {isLoading && (
@@ -113,17 +70,54 @@ export function Organization() {
         <EmptyState
           icon={Users}
           title="No employees yet"
-          description="Once employees are added, the reporting hierarchy will appear here."
+          description="Once employees are added, the department breakdown will appear here."
         />
       )}
 
       {!isLoading && !error && employees.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-8">
-          <div className="flex justify-center gap-10 min-w-max">
-            {roots.map((root) => (
-              <EmployeeNode key={root.id} employee={root} childrenMap={childrenMap} />
-            ))}
-          </div>
+        <div className="space-y-8">
+          {departmentGroups.map(([deptName, deptEmployees]) => (
+            <div key={deptName} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+              <div className="border-b border-gray-200 bg-gray-50 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-gray-900 font-medium">
+                  <Building2 className="h-5 w-5 text-primary-500" />
+                  <h2 className="text-lg font-semibold">{deptName}</h2>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                  {deptEmployees.length} {deptEmployees.length === 1 ? 'employee' : 'employees'}
+                </span>
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {deptEmployees.map(employee => (
+                    <Link
+                      key={employee.id}
+                      to={`/employees/${employee.id}`}
+                      className="flex flex-col rounded-lg border border-gray-200 p-4 hover:border-primary-300 hover:shadow-md transition-all bg-white"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar fallback={`${employee.firstName?.[0] ?? ''}${employee.lastName?.[0] ?? ''}`} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {employee.firstName} {employee.lastName}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">{employee.position}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center justify-between">
+                         <span className="text-xs font-medium text-gray-500">
+                           {employee.employeeType === 'FULL_TIME' ? 'Full Time' : 
+                            employee.employeeType === 'PART_TIME' ? 'Part Time' : 'Contractor'}
+                         </span>
+                         <EmployeeStatusBadge status={employee.status} />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

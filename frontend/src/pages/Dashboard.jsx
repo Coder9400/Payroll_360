@@ -201,6 +201,8 @@ function AdminHrDashboard({ stats, userRole }) {
   );
 }
 
+import { ProgressStats } from '../components/employee/ProgressStats';
+
 function EmployeeDashboard({ stats }) {
   const attendance = stats.todayAttendance ?? {};
   const leaveBalances = stats.leaveBalances ?? [];
@@ -219,61 +221,72 @@ function EmployeeDashboard({ stats }) {
     periodLabel: `${rawPayslip.period_start} – ${rawPayslip.period_end}`,
   };
 
+  const { currentUser } = useAuth();
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Clock className="h-4 w-4 text-emerald-600" />
-          <h2 className="text-sm font-semibold text-gray-900">Today's Attendance</h2>
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="h-4 w-4 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-gray-900">Today's Attendance</h2>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{attendance.status ?? 'Not checked in'}</p>
+          {attendance.check_in && (
+            <p className="text-xs text-gray-500 mt-1">
+              In: {new Date(attendance.check_in).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              {attendance.check_out && ` · Out: ${new Date(attendance.check_out).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
+            </p>
+          )}
+          <Link to="/my-attendance" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+            View attendance <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
-        <p className="text-2xl font-bold text-gray-900">{attendance.status ?? 'Not checked in'}</p>
-        {attendance.check_in && (
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarDays className="h-4 w-4 text-amber-600" />
+            <h2 className="text-sm font-semibold text-gray-900">Leave Balance</h2>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{leave.remaining ?? 0} days</p>
           <p className="text-xs text-gray-500 mt-1">
-            In: {new Date(attendance.check_in).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            {attendance.check_out && ` · Out: ${new Date(attendance.check_out).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
+            Allocated {leave.allocated ?? 0} · Used {leave.taken ?? 0}
           </p>
-        )}
-        <Link to="/my-attendance" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
-          View attendance <ArrowRight className="h-4 w-4" />
-        </Link>
+          <Link to="/my-time-off" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+            Request time off <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Wallet className="h-4 w-4 text-violet-600" />
+            <h2 className="text-sm font-semibold text-gray-900">Latest Payslip</h2>
+          </div>
+          {payslip ? (
+            <>
+              <p className="text-2xl font-bold text-gray-900">{money(payslip.netAmount)}</p>
+              <p className="text-xs text-gray-500 mt-1">{payslip.periodLabel ?? ''}</p>
+              <Link to={`/payslips/${payslip.id}`} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+                View payslip <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">No payslips yet.</p>
+              <Link to="/my-payslips" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
+                <FileText className="h-4 w-4" /> My payslips
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <CalendarDays className="h-4 w-4 text-amber-600" />
-          <h2 className="text-sm font-semibold text-gray-900">Leave Balance</h2>
-        </div>
-        <p className="text-2xl font-bold text-gray-900">{leave.remaining ?? 0} days</p>
-        <p className="text-xs text-gray-500 mt-1">
-          Allocated {leave.allocated ?? 0} · Used {leave.taken ?? 0}
-        </p>
-        <Link to="/my-time-off" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
-          Request time off <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
+      <hr className="border-gray-200" />
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Wallet className="h-4 w-4 text-violet-600" />
-          <h2 className="text-sm font-semibold text-gray-900">Latest Payslip</h2>
-        </div>
-        {payslip ? (
-          <>
-            <p className="text-2xl font-bold text-gray-900">{money(payslip.netAmount)}</p>
-            <p className="text-xs text-gray-500 mt-1">{payslip.periodLabel ?? ''}</p>
-            <Link to={`/payslips/${payslip.id}`} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
-              View payslip <ArrowRight className="h-4 w-4" />
-            </Link>
-          </>
-        ) : (
-          <>
-            <p className="text-sm text-gray-500">No payslips yet.</p>
-            <Link to="/my-payslips" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700">
-              <FileText className="h-4 w-4" /> My payslips
-            </Link>
-          </>
-        )}
-      </div>
+      {/* Progress & Stats Component */}
+      {currentUser?.employee?.id && (
+        <ProgressStats employeeId={currentUser.employee.id} />
+      )}
     </div>
   );
 }

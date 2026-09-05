@@ -15,6 +15,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { Modal } from "../components/ui/Modal";
 import { EmployeeForm } from "../components/employee/EmployeeForm";
 import { ContractTable } from "../components/contracts/ContractTable";
+import { ProgressStats } from "../components/employee/ProgressStats";
 import {
   ArrowLeft,
   Edit,
@@ -38,6 +39,7 @@ const useToast = () => ({
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
+  { id: 'progress',   label: 'Progress' },
   { id: 'personal',   label: 'Personal' },
   { id: 'employment', label: 'Employment' },
   { id: 'attendance', label: 'Attendance' },
@@ -283,6 +285,10 @@ export function EmployeeDetail() {
             )}
           </div>
         </div>
+      )}
+
+      {activeTab === 'progress' && (
+        <ProgressStats employeeId={id} />
       )}
 
       {activeTab === 'personal' && (
