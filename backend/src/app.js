@@ -37,8 +37,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // HTTP Request logging
 app.use(requestLogger);
 
+const path = require('path');
+
 // Base API route registration
 app.use('/api', apiRoutes);
+
+// Serve static public files (like policies PDFs)
+app.use('/public', express.static(path.join(__dirname, '..', 'public')));
 
 // Catch 404 and forward to error handler
 app.use(notFoundHandler);

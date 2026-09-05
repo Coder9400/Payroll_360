@@ -168,6 +168,14 @@ export const employeeService = {
   },
 
   /**
+   * Get Employee Progress Stats (Attendance & Leaves)
+   */
+  async getEmployeeProgress(id) {
+    const response = await api.get(`/employees/${id}/progress`);
+    return unwrap(response);
+  },
+
+  /**
    * Get reference data for dropdowns
    */
   async getReferenceData() {

@@ -42,6 +42,8 @@ import { Payruns } from './pages/Payruns';
 import { PayrunDetail } from './pages/PayrunDetail';
 import { PayslipDetail } from './pages/PayslipDetail';
 import { MyPayslips } from './pages/MyPayslips';
+import { Policies } from './pages/Policies';
+import { PolicyViewer } from './pages/PolicyViewer';
 
 // ─── Role constants ────────────────────────────────────────────────────────────
 const R = {
@@ -132,6 +134,22 @@ function App() {
               element={
                 <AuthRoute roles={[R.EMPLOYEE]}>
                   <MyPayslips />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="policies"
+              element={
+                <AuthRoute roles={ALL}>
+                  <Policies />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="policies/:id"
+              element={
+                <AuthRoute roles={ALL}>
+                  <PolicyViewer />
                 </AuthRoute>
               }
             />

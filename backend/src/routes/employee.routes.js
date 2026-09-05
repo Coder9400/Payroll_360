@@ -17,6 +17,9 @@ router.get('/', requirePermission(PERMISSIONS.EMPLOYEE_READ), employeeController
 router.get('/:id', requirePermission(PERMISSIONS.EMPLOYEE_READ, PERMISSIONS.EMPLOYEE_READ_OWN), employeeController.getEmployeeById);
 router.put('/:id', requirePermission(PERMISSIONS.EMPLOYEE_UPDATE), validate(updateEmployeeSchema), employeeController.updateEmployee);
 
+// Employee Progress Stats
+router.get('/:id/progress', requirePermission(PERMISSIONS.ATTENDANCE_READ_OWN), employeeController.getProgressStats);
+
 // Account Provisioning
 router.post('/:id/provision-account', requirePermission(PERMISSIONS.EMPLOYEE_CREATE, PERMISSIONS.ADMIN_USERS_MANAGE), employeeController.provisionAccount);
 router.post('/:id/disable-account', requirePermission(PERMISSIONS.EMPLOYEE_UPDATE, PERMISSIONS.ADMIN_USERS_MANAGE), employeeController.disableAccount);

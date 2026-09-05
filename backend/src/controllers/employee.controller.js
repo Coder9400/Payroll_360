@@ -242,3 +242,112 @@ exports.disableAccount = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getProgressStats = async (req, res, next) => {
+  try {
+    const employeeId = req.params.id;
+
+    // --- DATA ISOLATION ---
+    if (!req.user.permissions.includes(PERMISSIONS.EMPLOYEE_READ)) {
+      if (!req.user.employee || req.user.employee.id !== employeeId) {
+        throw new AppError('Forbidden: You can only access your own progress stats', 403, 'FORBIDDEN');
+      }
+    }
+
+    const now = new Date();
+    // Default to last month if today is in the first half of the month, or current month if later? 
+    // The user specifically asked for "last month" and "year-to-date".
+    // Let's calculate the start/end of the previous month.
+    let year = now.getFullYear();
+    let month = now.getMonth(); // 0-indexed, so this is previous month
+    if (month === 0) {
+      month = 12;
+      year -= 1;
+    }
+    
+    // Format: YYYY-MM-DD
+    const lastMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastMonthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
+    
+    const ytdStart = `${now.getFullYear()}-01-01`;
+    const ytdEnd = `${now.getFullYear()}-12-31`;
+
+    // 1. Fetch Attendance (Last Month)
+    const { data: lmAttData } = await withTenant(
+      db.from('attendance')
+        .select('status, overtime_hours')
+        .eq('employee_id', employeeId)
+        .gte('attendance_date', lastMonthStart)
+        .lte('attendance_date', lastMonthEnd),
+      req.user.tenantId
+    );
+
+    // 2. Fetch Attendance (YTD)
+    const { data: ytdAttData } = await withTenant(
+      db.from('attendance')
+        .select('status, overtime_hours')
+        .eq('employee_id', employeeId)
+        .gte('attendance_date', ytdStart)
+        .lte('attendance_date', ytdEnd),
+      req.user.tenantId
+    );
+
+    // 3. Fetch Time Off (Last Month)
+    const { data: lmLeaveData } = await withTenant(
+      db.from('time_off_requests')
+        .select('duration')
+        .eq('employee_id', employeeId)
+        .eq('status', 'APPROVED')
+        .gte('start_date', lastMonthStart)
+        .lte('end_date', lastMonthEnd),
+      req.user.tenantId
+    );
+
+    // 4. Fetch Time Off (YTD)
+    const { data: ytdLeaveData } = await withTenant(
+      db.from('time_off_requests')
+        .select('duration')
+        .eq('employee_id', employeeId)
+        .eq('status', 'APPROVED')
+        .gte('start_date', ytdStart)
+        .lte('end_date', ytdEnd),
+      req.user.tenantId
+    );
+
+    // Calculate Last Month metrics
+    const lm = {
+      daysPresent: 0,
+      daysLate: 0,
+      overtimeHours: 0,
+      leavesTaken: 0,
+    };
+    if (lmAttData) {
+      lm.daysPresent = lmAttData.filter(a => ['PRESENT', 'OVERTIME', 'LATE', 'HALF_DAY'].includes(a.status)).length;
+      lm.daysLate = lmAttData.filter(a => a.status === 'LATE').length;
+      lm.overtimeHours = lmAttData.reduce((sum, a) => sum + (Number(a.overtime_hours) || 0), 0);
+    }
+    if (lmLeaveData) {
+      lm.leavesTaken = lmLeaveData.reduce((sum, r) => sum + (Number(r.duration) || 0), 0);
+    }
+
+    // Calculate YTD metrics
+    const ytd = {
+      daysPresent: 0,
+      daysLate: 0,
+      overtimeHours: 0,
+      leavesTaken: 0,
+    };
+    if (ytdAttData) {
+      ytd.daysPresent = ytdAttData.filter(a => ['PRESENT', 'OVERTIME', 'LATE', 'HALF_DAY'].includes(a.status)).length;
+      ytd.daysLate = ytdAttData.filter(a => a.status === 'LATE').length;
+      ytd.overtimeHours = ytdAttData.reduce((sum, a) => sum + (Number(a.overtime_hours) || 0), 0);
+    }
+    if (ytdLeaveData) {
+      ytd.leavesTaken = ytdLeaveData.reduce((sum, r) => sum + (Number(r.duration) || 0), 0);
+    }
+
+    return successResponse(res, { lastMonth: lm, ytd, lastMonthLabel: new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' }) });
+  } catch (error) {
+    next(error);
+  }
+};

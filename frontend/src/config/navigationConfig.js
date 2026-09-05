@@ -90,6 +90,13 @@ export const navigationItems = [
     group: 'MY WORKSPACE',
     allowedRoles: [ROLE.EMPLOYEE],
   },
+  {
+    label: 'Company Policies',
+    path: '/policies',
+    icon: BookOpen,
+    group: 'MY WORKSPACE',
+    allowedRoles: ALL_ROLES,
+  },
 
   // ── People ──────────────────────────────────────────────────────────────
   {
@@ -270,6 +277,7 @@ export const routeBreadcrumbs = {
   '/my-time-off': [{ name: 'My Time Off', href: '/my-time-off' }],
   '/my-payslips': [{ name: 'My Payslips', href: '/my-payslips' }],
   '/access-denied': [{ name: 'Access Denied', href: '/access-denied' }],
+  '/policies': [{ name: 'Company Policies', href: '/policies' }],
 };
 
 /**
@@ -278,6 +286,13 @@ export const routeBreadcrumbs = {
  * MainLayout checks these when no exact match is found in routeBreadcrumbs.
  */
 export const dynamicBreadcrumbs = [
+  [
+    /^\/policies\/[^/]+$/,
+    () => [
+      { name: 'Company Policies', href: '/policies' },
+      { name: 'Policy Viewer', href: '#' },
+    ],
+  ],
   [
     /^\/employees\/[^/]+$/,
     () => [
