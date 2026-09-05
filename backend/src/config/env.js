@@ -14,8 +14,8 @@ const config = {
   },
   supabase: {
     url: process.env.SUPABASE_URL || '',
-    anonKey: process.env.SUPABASE_ANON_KEY || '',
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    anonKey: process.env.SUPABASE_PUBLISHABLE_KEY || '',
+    serviceRoleKey: process.env.SUPABASE_SECRET_KEY || '',
   },
   mistral: {
     apiKey: process.env.MISTRAL_API_KEY || '',

@@ -20,13 +20,20 @@ if (isConfigured) {
       },
     });
 
-    if (config.supabase.serviceRoleKey && !config.supabase.serviceRoleKey.includes('placeholder')) {
-      supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      });
+    if (
+      config.supabase.serviceRoleKey &&
+      !config.supabase.serviceRoleKey.includes('placeholder')
+    ) {
+      supabaseAdmin = createClient(
+        config.supabase.url,
+        config.supabase.serviceRoleKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
+      );
     }
   } catch (error) {
     console.error('Failed to initialize Supabase client:', error.message);
@@ -41,22 +48,44 @@ const checkDatabaseConnection = async () => {
   if (!isConfigured || !supabase) {
     return {
       status: 'unconfigured',
-      message: 'Supabase credentials are not configured or contain placeholder values',
+      message:
+        'Supabase credentials are not configured or contain placeholder values',
     };
   }
 
   try {
     // Attempt a lightweight ping query
-    const { error } = await supabase.from('_dummy_health_check').select('*').limit(1);
-    
-    // In Supabase, if the table doesn't exist (PGRST116/42P01), it still confirms connectivity to PostgREST
-    if (error && error.code !== '42P01' && error.code !== 'PGRST116' && error.code !== 'PGRST204' && !error.message?.includes('relation "_dummy_health_check" does not exist')) {
+    const { error } = await supabase
+      .from('_dummy_health_check')
+      .select('*')
+      .limit(1);
+
+    // If the table does not exist, Supabase has still responded,
+    // which confirms that the connection to Supabase is working.
+    const tableDoesNotExist =
+      error &&
+      (
+        error.code === '42P01' ||
+        error.code === 'PGRST116' ||
+        error.code === 'PGRST204' ||
+        error.message?.includes(
+          'relation "_dummy_health_check" does not exist'
+        ) ||
+        error.message?.includes(
+          "Could not find the table 'public._dummy_health_check'"
+        )
+      );
+
+    // A different error means something is actually wrong.
+    if (error && !tableDoesNotExist) {
       return {
         status: 'error',
         message: error.message,
       };
     }
 
+    // No error OR expected "table doesn't exist" error
+    // means Supabase itself is reachable.
     return {
       status: 'connected',
       message: 'Supabase connection established successfully',
