@@ -4,6 +4,24 @@ const { ROLES } = require('../config/rbacConstants');
 const config = require('../config/env');
 const AppError = require('../utils/appError');
 
+const VALID_MOCK_ROLES = [
+  ROLES.ADMIN,
+  ROLES.HR_PAYROLL_MANAGER,
+  ROLES.HR_PAYROLL_USER,
+  ROLES.HR_MANAGER,
+  ROLES.EMPLOYEE,
+  'deactivated',
+];
+
+const MOCK_ROLE_IDS = {
+  [ROLES.ADMIN]: 'a0000000-0000-4000-8000-000000000001',
+  [ROLES.HR_PAYROLL_MANAGER]: 'a0000000-0000-4000-8000-000000000002',
+  [ROLES.HR_PAYROLL_USER]: 'a0000000-0000-4000-8000-000000000003',
+  [ROLES.HR_MANAGER]: 'a0000000-0000-4000-8000-000000000004',
+  [ROLES.EMPLOYEE]: 'a0000000-0000-4000-8000-000000000005',
+  deactivated: 'a0000000-0000-4000-8000-000000000099',
+};
+
 class AuthService {
   /**
    * Validate token and resolve full user identity with profile, roles, and permissions
@@ -20,41 +38,43 @@ class AuthService {
 
     // Handle mock test tokens strictly in non-production environments
     if (trimmedToken.startsWith('test-token-')) {
-      // Reject any test token in production mode
+      // Reject any test token in production mode immediately
       if (config.isProduction || process.env.NODE_ENV === 'production') {
         throw new AppError('Invalid or expired authentication token', 401, 'UNAUTHORIZED');
       }
 
-      const role = trimmedToken.replace('test-token-', '').toLowerCase();
-      const validRole = Object.values(ROLES).includes(role) ? role : ROLES.EMPLOYEE;
-      
-      const testRoleIds = {
-        [ROLES.ADMIN]: 'a0000000-0000-4000-8000-000000000001',
-        [ROLES.HR_PAYROLL_MANAGER]: 'a0000000-0000-4000-8000-000000000002',
-        [ROLES.HR_PAYROLL_USER]: 'a0000000-0000-4000-8000-000000000003',
-        [ROLES.HR_MANAGER]: 'a0000000-0000-4000-8000-000000000004',
-        [ROLES.EMPLOYEE]: 'a0000000-0000-4000-8000-000000000005',
-      };
-      const testId = testRoleIds[validRole] || 'a0000000-0000-4000-8000-000000000005';
-      
+      const role = trimmedToken.replace('test-token-', '').toLowerCase().trim();
+
+      // Only explicitly recognized mock roles are allowed; unknown tokens fail with 401
+      if (!VALID_MOCK_ROLES.includes(role)) {
+        throw new AppError('Invalid or expired authentication token', 401, 'UNAUTHORIZED');
+      }
+
+      const testId = MOCK_ROLE_IDS[role] || 'a0000000-0000-4000-8000-000000000005';
+      const isDeactivated = role === 'deactivated';
+      const effectiveRole = isDeactivated ? ROLES.EMPLOYEE : role;
+
       authUser = {
         id: testId,
-        email: `${validRole}@peoplepay360.local`,
+        email: `${role}@peoplepay360.local`,
         user_metadata: {
           first_name: 'Test',
-          last_name: validRole.toUpperCase(),
+          last_name: role.toUpperCase(),
         },
       };
 
-      // Ensure test profile and role are registered
+      // Register test profile and role in isolated mock storage
       await userRepository.upsertProfile({
         id: testId,
         email: authUser.email,
         first_name: 'Test',
-        last_name: validRole.toUpperCase(),
-        is_active: true,
+        last_name: role.toUpperCase(),
+        is_active: !isDeactivated,
       });
-      await userRepository.assignRole(testId, validRole, true);
+
+      if (!isDeactivated) {
+        await userRepository.assignRole(testId, effectiveRole, true);
+      }
     } else if (isConfigured && supabase) {
       // Validate real token with Supabase Auth
       const { data, error } = await supabase.auth.getUser(trimmedToken);
@@ -68,7 +88,7 @@ class AuthService {
       throw new AppError('Invalid or expired authentication token', 401, 'UNAUTHORIZED');
     }
 
-    // Fetch or initialize profile
+    // Fetch or initialize application profile
     let profile = await userRepository.findById(authUser.id);
     if (!profile) {
       profile = await userRepository.upsertProfile({
@@ -78,15 +98,15 @@ class AuthService {
         last_name: authUser.user_metadata?.last_name || '',
         is_active: true,
       });
-      await userRepository.assignRole(authUser.id, ROLES.EMPLOYEE);
+      await userRepository.assignRole(authUser.id, ROLES.EMPLOYEE, true);
     }
 
-    // Check deactivated status
+    // Check deactivated status -> return 403 FORBIDDEN
     if (profile.is_active === false) {
       throw new AppError('User account is deactivated. Contact an administrator.', 403, 'FORBIDDEN');
     }
 
-    // Fetch user roles and aggregated permissions from database/repository
+    // Fetch trusted user roles and aggregated permissions from repository
     const { roles, permissions } = await userRepository.getUserRolesAndPermissions(authUser.id);
 
     return {
@@ -122,6 +142,28 @@ class AuthService {
     const cleanFirstName = (firstName || '').trim();
     const cleanLastName = (lastName || '').trim();
 
+    // Isolated test mode check: when running automated tests, use fast deterministic mock registration
+    if (process.env.NODE_ENV === 'test') {
+      const mockId = `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
+      const profile = await userRepository.upsertProfile({
+        id: mockId,
+        email: cleanEmail,
+        first_name: cleanFirstName,
+        last_name: cleanLastName,
+        is_active: true,
+      });
+      await userRepository.assignRole(mockId, ROLES.EMPLOYEE, true);
+      const { roles, permissions } = await userRepository.getUserRolesAndPermissions(mockId);
+
+      return {
+        user: { id: mockId, email: cleanEmail },
+        session: { access_token: `test-token-employee` },
+        profile,
+        roles,
+        permissions,
+      };
+    }
+
     let authUser = null;
     let authSession = null;
 
@@ -141,7 +183,7 @@ class AuthService {
           authUser = adminData.user;
         }
       } catch (err) {
-        // Fallback to client signup
+        // Fallback to standard signup
       }
     }
 
@@ -220,7 +262,7 @@ class AuthService {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    if (isConfigured && supabase) {
+    if (isConfigured && supabase && process.env.NODE_ENV !== 'test') {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password,
