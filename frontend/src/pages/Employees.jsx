@@ -9,14 +9,11 @@ import { EmployeeForm } from "../components/employee/EmployeeForm";
 import { employeeService } from "../services/employeeService";
 import { Search } from "lucide-react";
 
-// Fallback dummy toast hook for now
 const useToast = () => {
-  return {
-    toast: ({ title, description }) => {
-      // alert(`${title}${description ? ': ' + description : ''}`);
-      console.log('Toast:', title, description);
-    }
-  };
+  const toast = React.useCallback(({ title, description }) => {
+    console.log('Toast:', title, description);
+  }, []);
+  return { toast };
 };
 
 export function Employees() {

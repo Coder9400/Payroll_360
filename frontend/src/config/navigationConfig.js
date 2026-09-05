@@ -28,6 +28,7 @@ import {
   BookOpen,
   BarChart3,
   UserCircle,
+  Clock,
 } from 'lucide-react';
 
 /** All defined roles — keep in sync with authService.ALL_ROLES */
@@ -101,6 +102,13 @@ export const navigationItems = [
     label: 'Contracts',
     path: '/contracts',
     icon: FileSignature,
+    group: 'PEOPLE',
+    allowedRoles: HR_MANAGER_ROLES,
+  },
+  {
+    label: 'Schedules',
+    path: '/schedules',
+    icon: Clock,
     group: 'PEOPLE',
     allowedRoles: HR_MANAGER_ROLES,
   },
