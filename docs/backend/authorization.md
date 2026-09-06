@@ -1,3 +1,0 @@
-# Authorization
-
-**TBD — Implementation Decision**
