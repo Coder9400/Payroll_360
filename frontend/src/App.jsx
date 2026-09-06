@@ -36,6 +36,7 @@ import { Settings } from './pages/Settings';
 import { Notifications } from './pages/Notifications';
 
 // Payroll pages (Phase 4+5)
+import { AiPayrollAgent } from './pages/AiPayrollAgent';
 import { SalaryStructures } from './pages/SalaryStructures';
 import { SalaryRules } from './pages/SalaryRules';
 import { Payruns } from './pages/Payruns';
@@ -55,7 +56,7 @@ const R = {
 };
 const ALL = Object.values(R);
 const HR_AND_ABOVE = [R.HR_MANAGER, R.HR_PAYROLL_USER, R.HR_PAYROLL_MANAGER, R.ADMIN];
-const PAYROLL_ROLES = [R.HR_PAYROLL_USER, R.HR_PAYROLL_MANAGER, R.ADMIN];
+const PAYROLL_ROLES = [R.HR_MANAGER, R.HR_PAYROLL_USER, R.HR_PAYROLL_MANAGER, R.ADMIN];
 const PAYROLL_MGR = [R.HR_PAYROLL_MANAGER, R.ADMIN];
 const HR_MGR_ROLES = [R.HR_MANAGER, R.HR_PAYROLL_MANAGER, R.ADMIN];
 // ──────────────────────────────────────────────────────────────────────────────
@@ -273,6 +274,14 @@ function App() {
             />
 
             {/* ── Payroll ──────────────────────────────────────────── */}
+            <Route
+              path="ai-agent"
+              element={
+                <AuthRoute roles={PAYROLL_ROLES}>
+                  <AiPayrollAgent />
+                </AuthRoute>
+              }
+            />
             <Route
               path="payruns"
               element={

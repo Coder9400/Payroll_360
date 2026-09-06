@@ -68,6 +68,10 @@ router.use('/settings', settingsRoutes);
 const policyRoutes = require('./policy.routes');
 router.use('/policies', policyRoutes);
 
+// AI Payroll Agent
+const agentRoutes = require('./agent.routes');
+router.use('/agent', agentRoutes);
+
 // AI features
 router.use('/ai', aiRoutes);
 

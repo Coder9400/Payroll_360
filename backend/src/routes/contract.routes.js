@@ -5,13 +5,14 @@ const { createContractSchema, updateContractSchema } = require('../validators/hr
 const contractController = require('../controllers/contract.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePermission } = require('../middleware/rbac.middleware');
+const { PERMISSIONS } = require('../config/rbacConstants');
 
 router.use(requireAuth());
 
-router.post('/', requirePermission('create:contracts'), validate(createContractSchema), contractController.createContract);
-router.get('/', requirePermission('read:contracts'), contractController.getContracts);
-router.get('/:id', requirePermission('read:contracts'), contractController.getContractById);
-router.patch('/:id', requirePermission('update:contracts'), validate(updateContractSchema), contractController.updateContract);
-router.get('/applicable/:employeeId/:date', requirePermission('read:contracts'), contractController.getApplicableContract);
+router.post('/', requirePermission(PERMISSIONS.CONTRACT_CREATE), validate(createContractSchema), contractController.createContract);
+router.get('/', requirePermission(PERMISSIONS.CONTRACT_READ), contractController.getContracts);
+router.get('/:id', requirePermission(PERMISSIONS.CONTRACT_READ), contractController.getContractById);
+router.patch('/:id', requirePermission(PERMISSIONS.CONTRACT_UPDATE), validate(updateContractSchema), contractController.updateContract);
+router.get('/applicable/:employeeId/:date', requirePermission(PERMISSIONS.CONTRACT_READ), contractController.getApplicableContract);
 
 module.exports = router;

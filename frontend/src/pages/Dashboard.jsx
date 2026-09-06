@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Users, ClipboardCheck, CalendarDays, Receipt, FileText,
   ArrowRight, Clock, Wallet,
@@ -101,6 +101,7 @@ export function Dashboard() {
 
 function AdminHrDashboard({ stats, userRole }) {
   const isAdmin = userRole === 'Admin';
+  const navigate = useNavigate();
   const latestPayrun = stats.latestPayrun ?? null;
   const payroll = {
     payrunName: latestPayrun?.name ?? null,

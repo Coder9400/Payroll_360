@@ -9,7 +9,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { payrollService } from '../services/payrollService';
-import { Plus, ChevronRight, Users, DollarSign, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Plus, ChevronRight, Users, DollarSign, CheckCircle, Clock, AlertCircle, Bot } from 'lucide-react';
 
 const STATUS_CONFIG = {
   DRAFT:      { label: 'Draft',      color: 'bg-gray-100 text-gray-600', icon: Clock },
@@ -209,9 +209,18 @@ export function Payruns() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader title="Payruns" description="Manage payroll processing cycles." />
-        <Button onClick={() => setShowWizard(true)}>
-          <Plus className="h-4 w-4 mr-1" />New Payrun
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-violet-300 text-violet-700 hover:bg-violet-50"
+            onClick={() => navigate('/ai-agent')}
+          >
+            <Bot className="h-4 w-4 mr-1" /> AI Payroll Agent
+          </Button>
+          <Button onClick={() => setShowWizard(true)}>
+            <Plus className="h-4 w-4 mr-1" />New Payrun
+          </Button>
+        </div>
       </div>
 
       {loading ? (
