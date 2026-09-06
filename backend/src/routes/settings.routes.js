@@ -15,4 +15,9 @@ router
   .get(ctrl.getSettings)
   .patch(requirePermission(PERMISSIONS.ADMIN_SETTINGS_MANAGE), ctrl.updateSettings);
 
+router
+  .route('/geofence')
+  .get(ctrl.getGeofenceConfig)
+  .patch(requirePermission(PERMISSIONS.ADMIN_SETTINGS_MANAGE), ctrl.updateGeofenceConfig);
+
 module.exports = router;

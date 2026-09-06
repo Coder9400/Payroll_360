@@ -31,6 +31,7 @@ import {
   UserCircle,
   Clock,
   Network,
+  MapPin,
 } from 'lucide-react';
 
 /** All defined roles — keep in sync with authService.ALL_ROLES */
@@ -142,6 +143,13 @@ export const navigationItems = [
     label: 'Regularization',
     path: '/attendance/regularization',
     icon: CalendarClock,
+    group: 'ATTENDANCE',
+    allowedRoles: HR_AND_ABOVE,
+  },
+  {
+    label: 'Map View',
+    path: '/attendance/map',
+    icon: MapPin,
     group: 'ATTENDANCE',
     allowedRoles: HR_AND_ABOVE,
   },
@@ -259,6 +267,10 @@ export const routeBreadcrumbs = {
   '/attendance/regularization': [
     { name: 'Attendance', href: '/attendance' },
     { name: 'Regularization', href: '/attendance/regularization' },
+  ],
+  '/attendance/map': [
+    { name: 'Attendance', href: '/attendance' },
+    { name: 'Map View', href: '/attendance/map' },
   ],
   '/time-off': [{ name: 'Time Off', href: '/time-off' }],
   '/time-off/requests': [

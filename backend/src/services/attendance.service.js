@@ -181,6 +181,24 @@ function determineStatus({ checkIn, workedHours, expectedStart, expectedHours, i
 // ---------------------------------------------------------------------------
 
 /**
+ * Haversine formula to calculate distance between two coordinates in meters
+ */
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // metres
+  const φ1 = lat1 * Math.PI/180; // φ, λ in radians
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // in metres
+}
+
+/**
  * Check-in an employee.
  *
  * @param {object} params
@@ -188,15 +206,44 @@ function determineStatus({ checkIn, workedHours, expectedStart, expectedHours, i
  * @param {string} [params.employeeId] - HR override: specific employee to check in
  * @param {string} [params.notes]
  * @param {string} params.createdBy - User UUID performing the action
+ * @param {number} [params.lat] - Latitude from device GPS
+ * @param {number} [params.lng] - Longitude from device GPS
  * @returns {Promise<object>} Created attendance record
  */
-async function checkIn({ tenantId, userId, employeeId, notes, createdBy }) {
+async function checkIn({ tenantId, userId, employeeId, notes, createdBy, lat, lng }) {
   // Resolve employee
   let employee;
   if (employeeId) {
     employee = await getEmployeeWithSchedule(tenantId, employeeId);
   } else {
     employee = await resolveEmployeeFromUser(userId);
+  }
+
+  // Geofencing Check
+  const { data: tenant } = await db
+    .from('tenants')
+    .select('office_lat, office_lng, geofence_radius')
+    .eq('id', tenantId)
+    .single();
+
+  if (tenant && tenant.office_lat && tenant.office_lng) {
+    if (!lat || !lng) {
+      throw new AppError(
+        'Location access is required for check-in. Please enable GPS/Location in your browser.',
+        400,
+        ATTENDANCE_ERRORS.LOCATION_REQUIRED || 'LOCATION_REQUIRED'
+      );
+    }
+    const distance = calculateDistanceMeters(lat, lng, tenant.office_lat, tenant.office_lng);
+    const radius = tenant.geofence_radius || 500;
+    
+    if (distance > radius) {
+      throw new AppError(
+        `Check-in blocked: You are too far from the office (${Math.round(distance)}m away). Allowed radius is ${radius}m.`,
+        403,
+        'OUTSIDE_GEOFENCE'
+      );
+    }
   }
 
   const now = new Date();
@@ -245,6 +292,8 @@ async function checkIn({ tenantId, userId, employeeId, notes, createdBy }) {
       employee_id: employee.id,
       attendance_date: todayStr,
       check_in: now.toISOString(),
+      check_in_lat: lat || null,
+      check_in_lng: lng || null,
       check_out: null,
       worked_hours: null,
       status: ATTENDANCE_STATUS.MISSING_CHECKOUT,
@@ -284,15 +333,44 @@ async function checkIn({ tenantId, userId, employeeId, notes, createdBy }) {
  * @param {string} [params.employeeId]
  * @param {string} [params.notes]
  * @param {string} params.updatedBy
+ * @param {number} [params.lat] - Latitude from device GPS
+ * @param {number} [params.lng] - Longitude from device GPS
  * @returns {Promise<object>} Updated attendance record
  */
-async function checkOut({ tenantId, userId, employeeId, notes, updatedBy }) {
+async function checkOut({ tenantId, userId, employeeId, notes, updatedBy, lat, lng }) {
   // Resolve employee
   let employee;
   if (employeeId) {
     employee = await getEmployeeWithSchedule(tenantId, employeeId);
   } else {
     employee = await resolveEmployeeFromUser(userId);
+  }
+
+  // Geofencing Check
+  const { data: tenant } = await db
+    .from('tenants')
+    .select('office_lat, office_lng, geofence_radius')
+    .eq('id', tenantId)
+    .single();
+
+  if (tenant && tenant.office_lat && tenant.office_lng) {
+    if (!lat || !lng) {
+      throw new AppError(
+        'Location access is required for check-out. Please enable GPS/Location in your browser.',
+        400,
+        ATTENDANCE_ERRORS.LOCATION_REQUIRED || 'LOCATION_REQUIRED'
+      );
+    }
+    const distance = calculateDistanceMeters(lat, lng, tenant.office_lat, tenant.office_lng);
+    const radius = tenant.geofence_radius || 500;
+    
+    if (distance > radius) {
+      throw new AppError(
+        `Check-out blocked: You are too far from the office (${Math.round(distance)}m away). Allowed radius is ${radius}m.`,
+        403,
+        'OUTSIDE_GEOFENCE'
+      );
+    }
   }
 
   const now = new Date();
@@ -347,6 +425,8 @@ async function checkOut({ tenantId, userId, employeeId, notes, updatedBy }) {
     .from('attendance')
     .update({
       check_out: now.toISOString(),
+      check_out_lat: lat || null,
+      check_out_lng: lng || null,
       worked_hours: workedHours,
       overtime_hours: overtimeHours,
       status,

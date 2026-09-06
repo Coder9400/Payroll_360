@@ -16,7 +16,7 @@ export function Contracts() {
   const fetchData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      let data = await contractService.getContracts();
+      let data = await contractService.getContracts({ limit: 1000 });
       
       if (statusFilter !== 'All') {
         data = data.filter(c => c.status === statusFilter);

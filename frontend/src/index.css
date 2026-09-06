@@ -20,3 +20,33 @@
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 }
+
+/* ─── Leaflet map tile fixes (Tailwind base resets break these) ────────────── */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+  font-family: inherit;
+}
+
+/* Prevent Tailwind's img max-width reset from breaking map tiles */
+.leaflet-container img.leaflet-tile,
+.leaflet-container img.leaflet-marker-icon,
+.leaflet-container img.leaflet-marker-shadow {
+  max-width: none !important;
+  max-height: none !important;
+  width: auto;
+  height: auto;
+  box-sizing: content-box;
+}
+
+/* Fix popup close button that Tailwind hides */
+.leaflet-popup-close-button {
+  color: #374151 !important;
+  font-size: 18px !important;
+}
+
+/* Ensure map controls render above app z-index layers */
+.leaflet-control {
+  z-index: 1000;
+}

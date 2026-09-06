@@ -205,14 +205,41 @@ export function EmployeeAttendance() {
   const hasCheckedIn   = !!todayRecord?.checkIn;
   const hasCheckedOut  = !!todayRecord?.checkOut;
 
+  const getLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported by your browser'));
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          },
+          (error) => {
+            reject(new Error('Unable to retrieve your location. Please allow location access.'));
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+    });
+  };
+
   const handleCheckIn = async () => {
     setIsActionLoading(true);
     setActionError(null);
     try {
-      await attendanceService.checkIn(targetEmployeeId);
+      const { lat, lng } = await getLocation();
+      await attendanceService.checkIn(targetEmployeeId, null, lat, lng);
       await fetchData();
     } catch (error) {
-      setActionError(error.message || 'Unable to check in. Please try again.');
+      // Extract clean message from axios error or direct error
+      const msg = error?.response?.data?.error?.message
+        || error?.response?.data?.message
+        || error?.message
+        || 'Unable to check in. Please try again.';
+      setActionError(msg);
     } finally {
       setIsActionLoading(false);
     }
@@ -222,10 +249,15 @@ export function EmployeeAttendance() {
     setIsActionLoading(true);
     setActionError(null);
     try {
-      await attendanceService.checkOut(targetEmployeeId);
+      const { lat, lng } = await getLocation();
+      await attendanceService.checkOut(targetEmployeeId, null, lat, lng);
       await fetchData();
     } catch (error) {
-      setActionError(error.message || 'Unable to check out. Please try again.');
+      const msg = error?.response?.data?.error?.message
+        || error?.response?.data?.message
+        || error?.message
+        || 'Unable to check out. Please try again.';
+      setActionError(msg);
     } finally {
       setIsActionLoading(false);
     }

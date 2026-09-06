@@ -43,6 +43,8 @@ exports.checkIn = async (req, res, next) => {
       userId,
       employeeId,
       notes: req.body.notes,
+      lat: req.body.lat,
+      lng: req.body.lng,
       createdBy: userId,
     });
 
@@ -79,6 +81,8 @@ exports.checkOut = async (req, res, next) => {
       userId,
       employeeId,
       notes: req.body.notes,
+      lat: req.body.lat,
+      lng: req.body.lng,
       updatedBy: userId,
     });
 

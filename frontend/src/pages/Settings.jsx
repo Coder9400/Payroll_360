@@ -9,16 +9,14 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Tabs } from '../components/ui/Tabs';
 import { useAuth } from '../context/AuthContext';
-import {
-  settingsService,
-  loadHolidayCalendar,
-  saveHolidayCalendar,
-} from '../services/settingsService';
-import { Building2, CalendarDays, Shield, Plug, Plus, Trash2 } from 'lucide-react';
+import { settingsService, loadHolidayCalendar, saveHolidayCalendar } from '../services/settingsService';
+import api from '../services/api';
+import { Building2, CalendarDays, Shield, Plug, Plus, Trash2, MapPin } from 'lucide-react';
 
 const TABS = [
   { id: 'company', label: 'Company' },
   { id: 'holidays', label: 'Holiday calendar' },
+  { id: 'geofence', label: 'Geofence' },
   { id: 'roles', label: 'Roles & permissions' },
   { id: 'integrations', label: 'Integrations' },
 ];
@@ -55,6 +53,11 @@ export function Settings() {
   const [holidays, setHolidays] = React.useState([]);
   const [newHoliday, setNewHoliday] = React.useState({ date: '', name: '' });
 
+  // Geofence state
+  const [geofence, setGeofence] = React.useState({ officeLat: '', officeLng: '', geofenceRadius: 500 });
+  const [geofenceSaving, setGeofenceSaving] = React.useState(false);
+  const [geofenceMsg, setGeofenceMsg] = React.useState('');
+
   React.useEffect(() => {
     setHolidays(loadHolidayCalendar());
     settingsService
@@ -66,6 +69,14 @@ export function Settings() {
       })
       .catch((err) => setMessage(err.response?.data?.error?.message || err.message))
       .finally(() => setLoading(false));
+
+    // Load geofence config
+    api.get('/settings/geofence')
+      .then((res) => {
+        const d = res.data?.data;
+        if (d) setGeofence({ officeLat: d.officeLat ?? '', officeLng: d.officeLng ?? '', geofenceRadius: d.geofenceRadius ?? 500 });
+      })
+      .catch(() => {}); // Non-critical, silently fail
   }, []);
 
   const saveCompany = async (e) => {
@@ -80,6 +91,24 @@ export function Settings() {
       setMessage(err.response?.data?.error?.message || err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveGeofence = async (e) => {
+    e.preventDefault();
+    setGeofenceSaving(true);
+    setGeofenceMsg('');
+    try {
+      await api.patch('/settings/geofence', {
+        office_lat: geofence.officeLat,
+        office_lng: geofence.officeLng,
+        geofence_radius: geofence.geofenceRadius,
+      });
+      setGeofenceMsg('✅ Geofence settings saved successfully.');
+    } catch (err) {
+      setGeofenceMsg('❌ ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setGeofenceSaving(false);
     }
   };
 
@@ -195,6 +224,71 @@ export function Settings() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'geofence' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6 max-w-2xl">
+          <div className="flex items-center gap-2 text-gray-900 font-semibold">
+            <MapPin className="h-4 w-4 text-primary-600" /> Geofence Configuration
+          </div>
+          <p className="text-sm text-gray-500">
+            Set your office location and allowed check-in radius. Employees outside this radius will be blocked from checking in.
+          </p>
+          <form onSubmit={saveGeofence} className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Office Latitude</label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 28.6139"
+                  value={geofence.officeLat}
+                  onChange={(e) => setGeofence(g => ({ ...g, officeLat: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Office Longitude</label>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 77.2090"
+                  value={geofence.officeLng}
+                  onChange={(e) => setGeofence(g => ({ ...g, officeLng: e.target.value }))}
+                  disabled={!canEdit}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Geofence Radius (meters)
+              </label>
+              <Input
+                type="number"
+                min="50"
+                max="50000"
+                placeholder="500"
+                value={geofence.geofenceRadius}
+                onChange={(e) => setGeofence(g => ({ ...g, geofenceRadius: e.target.value }))}
+                disabled={!canEdit}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Minimum 50m. Recommended 200–1000m for office buildings.
+              </p>
+            </div>
+            <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700 space-y-1">
+              <p className="font-medium">💡 How to find your office coordinates:</p>
+              <p>1. Open <a href="https://maps.google.com" target="_blank" rel="noreferrer" className="underline">Google Maps</a></p>
+              <p>2. Right-click on your office location</p>
+              <p>3. Click the coordinates at the top of the menu to copy them</p>
+            </div>
+            {canEdit && (
+              <Button type="submit" isLoading={geofenceSaving}>Save Geofence</Button>
+            )}
+            {!canEdit && <p className="text-xs text-gray-400">Only an Admin can change geofence settings.</p>}
+            {geofenceMsg && <p className="text-sm text-gray-600">{geofenceMsg}</p>}
+          </form>
         </div>
       )}
 

@@ -30,7 +30,11 @@ function mapRecord(r) {
     department:     emp.department?.name ?? '',
     date:           r.attendance_date,
     checkIn:        r.check_in,
+    checkInLat:     r.check_in_lat,
+    checkInLng:     r.check_in_lng,
     checkOut:       r.check_out,
+    checkOutLat:    r.check_out_lat,
+    checkOutLng:    r.check_out_lng,
     workedHours:    r.worked_hours ?? null,
     scheduledHours: r.expected_hours ?? 8,
     overtime:       r.overtime_hours ?? null,
@@ -140,9 +144,11 @@ export const attendanceService = {
   /**
    * Check In
    */
-  async checkIn(employeeId, notes) {
+  async checkIn(employeeId, notes, lat, lng) {
     const payload = {};
     if (notes) payload.notes = notes;
+    if (lat) payload.lat = lat;
+    if (lng) payload.lng = lng;
     const response = await api.post('/attendance/check-in', payload);
     return mapRecord(unwrap(response));
   },
@@ -150,9 +156,11 @@ export const attendanceService = {
   /**
    * Check Out
    */
-  async checkOut(employeeId, notes) {
+  async checkOut(employeeId, notes, lat, lng) {
     const payload = {};
     if (notes) payload.notes = notes;
+    if (lat) payload.lat = lat;
+    if (lng) payload.lng = lng;
     const response = await api.post('/attendance/check-out', payload);
     return mapRecord(unwrap(response));
   },

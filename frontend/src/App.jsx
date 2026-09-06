@@ -22,6 +22,7 @@ import { MyProfile } from './pages/MyProfile';
 import { Attendance } from './pages/Attendance';
 import { EmployeeAttendance } from './pages/EmployeeAttendance';
 import { AttendanceRegularization } from './pages/AttendanceRegularization';
+import { AttendanceMapPage } from './pages/AttendanceMapPage';
 import { MyTimeOff } from './pages/MyTimeOff';
 import { TimeOff } from './pages/TimeOff';
 import { LeaveRequests } from './pages/LeaveRequests';
@@ -227,6 +228,14 @@ function App() {
               element={
                 <AuthRoute roles={HR_AND_ABOVE}>
                   <AttendanceRegularization />
+                </AuthRoute>
+              }
+            />
+            <Route
+              path="attendance/map"
+              element={
+                <AuthRoute roles={HR_AND_ABOVE}>
+                  <AttendanceMapPage />
                 </AuthRoute>
               }
             />
