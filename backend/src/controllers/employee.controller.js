@@ -10,6 +10,63 @@ const db = supabaseAdmin || supabase;
 exports.createEmployee = async (req, res, next) => {
   try {
     const payload = withTenantId(req.body, req.user.tenantId);
+
+    // Auto-provision Auth account for the new employee
+    const defaultPassword = 'Demo@123456';
+    let newUserId = null;
+
+    try {
+      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+        email: payload.email,
+        password: defaultPassword,
+        email_confirm: true,
+        user_metadata: {
+          first_name: payload.first_name,
+          last_name: payload.last_name,
+        }
+      });
+
+      if (authErr) {
+        if (authErr.message.includes('already registered')) {
+          const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+          const existingUser = users.find(u => u.email === payload.email);
+          if (existingUser) newUserId = existingUser.id;
+        } else {
+          console.error('Auth Error during auto-provision:', authErr);
+        }
+      } else if (authData?.user) {
+        newUserId = authData.user.id;
+      }
+
+      if (newUserId) {
+        // Create profile
+        await db.from('profiles').upsert({
+          id: newUserId,
+          email: payload.email,
+          first_name: payload.first_name,
+          last_name: payload.last_name,
+          is_active: true,
+          tenant_id: payload.tenant_id,
+        });
+
+        // Assign Employee role
+        const { data: roleData } = await db.from('roles').select('id').eq('slug', ROLES.EMPLOYEE).single();
+        if (roleData) {
+          await db.from('user_roles').upsert({ 
+            user_id: newUserId, 
+            role_id: roleData.id, 
+            tenant_id: payload.tenant_id 
+          }, { onConflict: 'user_id,role_id' });
+        }
+      }
+    } catch (provisionErr) {
+      console.error('Auto-provision failed:', provisionErr);
+    }
+
+    if (newUserId) {
+      payload.user_id = newUserId;
+    }
+
     const { data, error } = await db
       .from('employees')
       .insert([payload])
@@ -25,6 +82,47 @@ exports.createEmployee = async (req, res, next) => {
       }
       if (error.code === '23503') throw new AppError('A related record (Department, Job Position, Manager, Schedule, or User) does not exist', 400);
       throw new AppError(error.message, 500);
+    }
+
+    // Auto-provision default leave balances
+    try {
+      const { data: types } = await db.from('time_off_types').select('id, code').in('code', ['PTO', 'SICK']).eq('tenant_id', payload.tenant_id);
+      const allocations = [];
+      const currentYear = new Date().getFullYear();
+      
+      const pto = types?.find(t => t.code === 'PTO');
+      if (pto) {
+        allocations.push({
+          employee_id: data.id,
+          time_off_type_id: pto.id,
+          allocated_amount: 20,
+          approved_amount: 20,
+          remaining_amount: 20,
+          valid_from: `${currentYear}-01-01`,
+          status: 'APPROVED',
+          tenant_id: payload.tenant_id
+        });
+      }
+
+      const sick = types?.find(t => t.code === 'SICK');
+      if (sick) {
+        allocations.push({
+          employee_id: data.id,
+          time_off_type_id: sick.id,
+          allocated_amount: 10,
+          approved_amount: 10,
+          remaining_amount: 10,
+          valid_from: `${currentYear}-01-01`,
+          status: 'APPROVED',
+          tenant_id: payload.tenant_id
+        });
+      }
+
+      if (allocations.length > 0) {
+        await db.from('time_off_allocations').insert(allocations);
+      }
+    } catch (leaveErr) {
+      console.error('Failed to auto-provision leave balances:', leaveErr);
     }
 
     return successResponse(res, data, 'Employee created successfully', 201);

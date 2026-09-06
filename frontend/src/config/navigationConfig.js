@@ -15,6 +15,7 @@
  */
 
 import {
+  Bot,
   LayoutDashboard,
   Users,
   ClipboardCheck,
@@ -43,7 +44,7 @@ const ROLE = {
 
 const ALL_ROLES = Object.values(ROLE);
 const HR_AND_ABOVE = [ROLE.HR_MANAGER, ROLE.HR_PAYROLL_USER, ROLE.HR_PAYROLL_MANAGER, ROLE.ADMIN];
-const PAYROLL_ROLES = [ROLE.HR_PAYROLL_USER, ROLE.HR_PAYROLL_MANAGER, ROLE.ADMIN];
+const PAYROLL_ROLES = [ROLE.HR_MANAGER, ROLE.HR_PAYROLL_USER, ROLE.HR_PAYROLL_MANAGER, ROLE.ADMIN];
 const PAYROLL_MANAGER_ROLES = [ROLE.HR_PAYROLL_MANAGER, ROLE.ADMIN];
 const HR_MANAGER_ROLES = [ROLE.HR_MANAGER, ROLE.HR_PAYROLL_MANAGER, ROLE.ADMIN];
 
@@ -169,6 +170,13 @@ export const navigationItems = [
   },
 
   // ── Payroll ─────────────────────────────────────────────────────────────
+  {
+    label: 'AI Payroll Agent',
+    path: '/ai-agent',
+    icon: Bot,
+    group: 'PAYROLL',
+    allowedRoles: PAYROLL_ROLES,
+  },
   {
     label: 'Payruns',
     path: '/payruns',

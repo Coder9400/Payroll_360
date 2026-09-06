@@ -10,7 +10,18 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 
 // Security HTTP headers
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  xFrameOptions: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      frameAncestors: ["*"], // Allow embedding in iframes
+      objectSrc: ["'self'"],
+      // Keep other defaults if needed, or simply override what's necessary
+    },
+  }
+}));
 
 // CORS configuration
 const corsOptions = {
